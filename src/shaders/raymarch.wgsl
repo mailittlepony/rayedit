@@ -1,11 +1,20 @@
 struct Globals {
-    resolution: vec2<f32>,
-    mouse: vec3<f32>,
-    _pad1: f32,
-    time: f32,
-    deltaTime: f32,
-    objectCount: f32,
-}
+    resolution : vec2<f32>, 
+    _pad0      : vec2<f32>,
+    camPos     : vec3<f32>, 
+    _pad1      : f32,
+    camFwd     : vec3<f32>,
+    _pad2      : f32,     
+    camRight   : vec3<f32>,
+    _pad3      : f32,     
+    camUp      : vec3<f32>, 
+    _pad4      : f32,
+    time       : f32,      
+    deltaTime  : f32,     
+    objectCount: f32,    
+    _pad5      : f32,   
+};
+
 
 struct Object {
     id: f32,
@@ -45,52 +54,53 @@ fn vs_main(@location(0) pos: vec2<f32>) -> VSOut {
 @fragment
 fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
     let uv = (fragCoord.xy - uniforms.resolution * 0.5) / min(uniforms.resolution.x, uniforms.resolution.y);
-
-  // Camera Coords
+    
+    // Camera target
     let cam_target = vec3<f32>(0.0, 0.0, 0.0);
-    let cam_pos = vec3<f32>(0.0, 2.0, 4.0);
 
-  // Camera Matrix
-    let cam_forward = normalize(cam_target - cam_pos);
-    let cam_right = normalize(cross(cam_forward, vec3<f32>(0.0, 1.0, 0.0)));
-    let cam_up = cross(cam_right, cam_forward); // Re-orthogonalized up
+    // Distance from camera to target
+    let cam_radius = 4.0;
 
-  // Ray Direction
-  // 1.5 is the "focal length" or distance to the projection plane
+    // Spherical - Cartesian using yaw/pitch
+    let cam_pos = uniforms.camPos;
+    let cam_forward = uniforms.camFwd;
+    let cam_right = uniforms.camRight;
+    let cam_up = uniforms.camUp;
+
     let focal_length = 1.5;
     let rd = normalize(cam_right * uv.x - cam_up * uv.y + cam_forward * focal_length);
 
-  // Ray march
+    // Ray march
     let result = ray_march(cam_pos, rd);
 
     if result.x < MAX_DIST {
-    // Hit something - calculate lighting
+        // Hit something - calculate lighting
         let hit_pos = cam_pos + rd * result.x;
         let normal = get_normal(hit_pos);
 
-    // Diffuse Lighting
+        // Diffuse Lighting
         let light_pos = vec3<f32>(2.0, 5.0, -1.0);
         let light_dir = normalize(light_pos - hit_pos);
         let diffuse = max(dot(normal, light_dir), 0.0);
 
-    // Shadow Casting
+        // Shadow Casting
         let shadow_origin = hit_pos + normal * 0.01;
         let shadow_result = ray_march(shadow_origin, light_dir);
         let shadow = select(0.3, 1.0, shadow_result.x > length(light_pos - shadow_origin));
 
-    // Phong Shading
+        // Phong Shading
         let ambient = 0.2;
         var albedo = get_material_color(result.y, hit_pos);
         let phong = albedo * (ambient + diffuse * shadow * 0.8);
 
-    // Exponential Fog
+        // Exponential Fog
         let fog = exp(-result.x * 0.02);
         let color = mix(MAT_SKY_COLOR, phong, fog);
 
         return vec4<f32>(gamma_correct(color), 1.0);
     }
 
-  // Sky gradient
+    // Sky gradient
     let sky = mix(MAT_SKY_COLOR, MAT_SKY_COLOR * 0.9, uv.y * 0.5 + 0.5);
     return vec4<f32>(gamma_correct(sky), 1.0);
 }

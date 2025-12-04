@@ -5,14 +5,19 @@ import { Object as SceneObject } from "./object";
 
 export type Globals = {
     resolution?: vec2;
-    mouse?: vec3;
+
+    camPos?: vec3;
+    camFwd?: vec3;
+    camRight?: vec3;
+    camUp?: vec3;
+
     time?: number;
     deltaTime?: number;
     objectCount?: number;
 };
 
 export class Renderer {
-    static readonly GLOBALS_WPAD_SIZE_BYTES = 48;
+    static readonly GLOBALS_WPAD_SIZE_BYTES = 96;
 
     private device: GPUDevice;
     private context: GPUCanvasContext;
@@ -38,7 +43,10 @@ export class Renderer {
 
         this.initPipelineAndBuffers();
     }
-
+    
+    getObjectCount(): number {
+        return this.objects.length;
+    }
 
     private initPipelineAndBuffers() {
         const { device } = this;
@@ -199,23 +207,28 @@ export class Renderer {
 
 
     updateGlobals(globals: Globals): void {
-        for (const key in globals) {
-            const value = globals[key as keyof Globals];
-            if (value !== undefined) {
-                this.lastGlobals[key as keyof Globals] = value;
-            }
+    for (const key in globals) {
+        const value = globals[key as keyof Globals];
+        if (value !== undefined) {
+            this.lastGlobals[key as keyof Globals] = value;
         }
-
-        const data = new Float32Array(Renderer.GLOBALS_WPAD_SIZE_BYTES / 4);
-
-        data.set(this.lastGlobals.resolution ?? [0, 0], 0); 
-        data.set(this.lastGlobals.mouse ?? [0, 0, 0], 4);  
-        data.set([
-            this.lastGlobals.time ?? 0,
-            this.lastGlobals.deltaTime ?? 0,
-            this.lastGlobals.objectCount ?? 0,],8); 
-
-        this.device.queue.writeBuffer(this.globalsBuffer, 0, data);
     }
+
+    const data = new Float32Array(Renderer.GLOBALS_WPAD_SIZE_BYTES / 4);
+
+    data.set(this.lastGlobals.resolution ?? [0, 0], 0);
+    data.set(this.lastGlobals.camPos ?? [0, 2, 4], 4);
+    data.set(this.lastGlobals.camFwd ?? [0, 0, -1], 8);
+    data.set(this.lastGlobals.camRight ?? [1, 0, 0], 12);
+    data.set(this.lastGlobals.camUp ?? [0, 1, 0], 16);
+    data.set([
+        this.lastGlobals.time ?? 0,
+        this.lastGlobals.deltaTime ?? 0,
+        this.lastGlobals.objectCount ?? 0,
+    ], 20);
+
+    this.device.queue.writeBuffer(this.globalsBuffer, 0, data);
+    }
+
 }
 

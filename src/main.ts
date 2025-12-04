@@ -1,11 +1,14 @@
 
-import "./style.css"
+import "./style.css";
 import { Renderer } from "./renderer";
 import { Object, PrimitiveType } from "./object";
+import { Camera } from "./camera";
 
 
+// --- WebGPU init ---
 async function initWebGPU(canvas: HTMLCanvasElement)
-    : Promise<{ context: GPUCanvasContext, device: GPUDevice, format: GPUTextureFormat }> {
+: Promise<{ context: GPUCanvasContext; device: GPUDevice; format: GPUTextureFormat }> {
+
     if (!navigator.gpu) {
         throw Error("WebGPU not supported.");
     }
@@ -26,70 +29,141 @@ async function initWebGPU(canvas: HTMLCanvasElement)
 
     context.configure({
         device,
-        format: format,
+        format,
         alphaMode: "premultiplied",
     });
 
     return { context, device, format };
 }
 
-let context: GPUCanvasContext;
-let format: GPUTextureFormat;
-let device: GPUDevice;
 
-
-// --- Entry Point ---
-const app = document.querySelector("#app")!;
+// --- Globals ---
+const app = document.querySelector("#app")! as HTMLDivElement;
 
 const canvas = document.createElement("canvas");
 app.appendChild(canvas);
 
-const gpu = await initWebGPU(canvas);
-device = gpu.device;
-context = gpu.context;
-format = gpu.format;
+const { device, context, format } = await initWebGPU(canvas);
 
 const renderer = new Renderer({ device, context, format });
+const camera = new Camera();
 
-function animate(t: number) {
-    
-    renderer.render();
-    requestAnimationFrame(animate);
-}
-requestAnimationFrame(animate);
 
-let boule = new Object({
-    name: "Maili",
-    primitive: PrimitiveType.TORUS,
-    position: [-1, 0, 0],
-    scale: [0.5, 0.2, 1.0]
+// --- Mouse state ---
+let isLeftDown = false;
+let isRightDown = false;
+let lastMouse: [number, number] = [0, 0];
+
+canvas.addEventListener("mousedown", (e: MouseEvent) => {
+    const rect = canvas.getBoundingClientRect();
+    lastMouse = [e.clientX - rect.left, e.clientY - rect.top];
+
+    if (e.button === 0) isLeftDown  = true; 
+    if (e.button === 2) isRightDown = true; 
+
+    // Disable right-click menu
+    if (e.button === 2) e.preventDefault();
 });
 
-let caca = new Object({
-    name: "Maili",
-    primitive: PrimitiveType.CUBOID,
-    position: [1, 0, 0],
-    scale: [0.5, 0.2, 1.0]
-})
+canvas.addEventListener("mouseup", (e: MouseEvent) => {
+    if (e.button === 0) isLeftDown  = false;
+    if (e.button === 2) isRightDown = false;
+});
 
-renderer.addObject(boule);
+canvas.addEventListener("mouseleave", () => {
+    isLeftDown = false;
+    isRightDown = false;
+});
 
-renderer.addObject(caca);
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
-// obj.updateObject(1, {
-//     position: [0, 0, 0]
-// })
+canvas.addEventListener("mousemove", (e: MouseEvent) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
-//--- Event Listeners---
-//
+    const dx = x - lastMouse[0];
+    const dy = y - lastMouse[1];
+    lastMouse = [x, y];
+
+    const orbitSpeed = 0.005;
+    const panSpeed = 0.01;
+
+    if (isLeftDown) {
+        camera.orbit(dx, dy, orbitSpeed);
+        camera.updateMatrices();
+    }
+
+    if (isRightDown) {
+        camera.pan(dx, dy, panSpeed);
+        camera.updateMatrices();
+    }
+});
+
+canvas.addEventListener("wheel", (e: WheelEvent) => {
+    camera.zoom(e.deltaY);
+    camera.updateMatrices();
+}, { passive: false });
+
+
+// --- Resize handling ---
 function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
     renderer.updateGlobals({
-        resolution: [canvas.width, canvas.height]
+        resolution: [canvas.width, canvas.height] as any,
     });
 }
 resize();
-
 window.addEventListener("resize", resize);
+
+
+// --- Schene objects ---
+const boule = new Object({
+    name: "Maili",
+    primitive: PrimitiveType.TORUS,
+    position: [-1, 0, 0] as any,
+    scale: [0.5, 0.2, 1.0] as any,
+});
+
+const caca = new Object({
+    name: "Maili",
+    primitive: PrimitiveType.CUBOID,
+    position: [1, 0, 0] as any,
+    scale: [0.5, 0.2, 1.0] as any,
+});
+
+renderer.addObject(boule);
+renderer.addObject(caca);
+
+caca.position[0] -= 2;
+caca.updateObject();
+
+
+// --- Animation loop ---
+let lastTime = performance.now();
+
+function animate(now: number) {
+    const t = now / 1000;                   
+    const dt = (now - lastTime) / 1000;    
+    lastTime = now;
+
+    renderer.updateGlobals({
+        resolution: [canvas.width, canvas.height] as any,
+        camPos: camera.position,
+        camFwd: camera.forward,
+        camRight: camera.right,
+        camUp: camera.upVec,
+        time: t,
+        deltaTime: dt,
+        objectCount: renderer.getObjectCount(),
+    });
+
+
+    renderer.render();
+    requestAnimationFrame(animate);
+}
+
+requestAnimationFrame(animate);
+
