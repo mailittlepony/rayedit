@@ -1,6 +1,5 @@
 struct Globals {
     resolution: vec2<f32>,
-    _pad0: vec2<f32>,
     mouse: vec3<f32>,
     _pad1: f32,
     time: f32,
