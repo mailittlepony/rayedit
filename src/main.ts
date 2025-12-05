@@ -1,8 +1,8 @@
 
 import "./style.css";
-import { Renderer } from "./renderer";
-import { Object, PrimitiveType } from "./object";
-import { Camera } from "./camera";
+import { Renderer } from "./core/renderer";
+import { Object, PrimitiveType } from "./core/object";
+import { Camera } from "./core/camera";
 
 
 // --- WebGPU init ---

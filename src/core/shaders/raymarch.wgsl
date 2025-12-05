@@ -53,7 +53,8 @@ fn vs_main(@location(0) pos: vec2<f32>) -> VSOut {
 
 @fragment
 fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
-    let uv = (fragCoord.xy - uniforms.resolution * 0.5) / min(uniforms.resolution.x, uniforms.resolution.y);
+    let uv = (fragCoord.xy - uniforms.resolution * 0.5) 
+           / min(uniforms.resolution.x, uniforms.resolution.y);
     
     // Camera target
     let cam_target = vec3<f32>(0.0, 0.0, 0.0);
@@ -72,6 +73,46 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
 
     // Ray march
     let result = ray_march(cam_pos, rd);
+
+   // grid overlay 
+    var gridColor = vec3<f32>(0.0, 0.0, 0.0);
+    var hasGrid = false;
+
+    // Only compute grid if ray is not pointing exactly horizontal
+    if abs(rd.y) > 1e-4 {
+        let tGrid = (GRID_HEIGHT - cam_pos.y) / rd.y;
+
+        if tGrid > 0.0 {
+            if tGrid < result.x {
+                let pGrid = cam_pos + rd * tGrid;
+                let xz = pGrid.xz;
+
+                if abs(xz.x) <= GRID_EXTENT && abs(xz.y) <= GRID_EXTENT {
+
+                    // Axis lines
+                    if abs(xz.x) < GRID_AXIS_WIDTH {
+                        gridColor = GRID_AXIS_X_COLOR;
+                        hasGrid = true;
+                    }
+                    else if abs(xz.y) < GRID_AXIS_WIDTH {
+                        gridColor = GRID_AXIS_Z_COLOR;
+                        hasGrid = true;
+                    }
+                    else {
+                        // Normal grid lines
+                        let coord = xz / GRID_CELL_SIZE;
+                        let fx = abs(fract(coord.x) - 0.5);
+                        let fz = abs(fract(coord.y) - 0.5);
+
+                        if fx < GRID_LINE_WIDTH || fz < GRID_LINE_WIDTH {
+                            gridColor = GRID_LINE_COLOR;
+                            hasGrid = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     if result.x < MAX_DIST {
         // Hit something - calculate lighting
@@ -97,13 +138,21 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
         let fog = exp(-result.x * 0.02);
         let color = mix(MAT_SKY_COLOR, phong, fog);
 
+        if hasGrid {
+            return vec4<f32>(gridColor, 1.0);
+        }
         return vec4<f32>(gamma_correct(color), 1.0);
     }
 
     // Sky gradient
     let sky = mix(MAT_SKY_COLOR, MAT_SKY_COLOR * 0.9, uv.y * 0.5 + 0.5);
+
+    if hasGrid {
+        return vec4<f32>(gridColor, 1.0);
+    }
     return vec4<f32>(gamma_correct(sky), 1.0);
 }
+
 
 // Gamma Correction
 fn gamma_correct(color: vec3<f32>) -> vec3<f32> {
@@ -120,21 +169,49 @@ const MAT_PLANE: f32 = 0.0;
 const MAT_SPHERE: f32 = 1.0;
 
 // Material Colors
-const MAT_SKY_COLOR: vec3<f32> = vec3<f32>(0.7, 0.8, 0.9);
-const MAT_PLANE_COLOR: vec3<f32> = vec3<f32>(0.8, 0.8, 0.8);
+const MAT_SKY_COLOR: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
 const MAT_SPHERE_COLOR: vec3<f32> = vec3<f32>(1.0, 0.3, 0.3);
+
+// Grid settings
+const GRID_HEIGHT     : f32 = 0.0;
+const GRID_EXTENT     : f32 = 10.0;   
+const GRID_CELL_SIZE  : f32 = 1.0;
+const GRID_LINE_WIDTH : f32 = 0.01;
+const GRID_AXIS_WIDTH : f32 = 0.01;
+
+// Colors
+const GRID_BG_COLOR      : vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);  
+const GRID_LINE_COLOR    : vec3<f32> = vec3<f32>(0.30, 0.30, 0.30);
+const GRID_AXIS_X_COLOR  : vec3<f32> = vec3<f32>(1.0, 0.1, 0.1);
+const GRID_AXIS_Z_COLOR  : vec3<f32> = vec3<f32>(0.1, 1.0, 0.1);
+
 
 fn get_material_color(mat_id: f32, p: vec3<f32>) -> vec3<f32> {
     if mat_id == MAT_PLANE {
-        let checker = floor(p.x) + floor(p.z);
-        let col1 = vec3<f32>(0.9, 0.9, 0.9);
-        let col2 = vec3<f32>(0.2, 0.2, 0.2);
-        return select(col2, col1, i32(checker) % 2 == 0);
+        let xz = p.xz;
+        // Axis lines 
+        if abs(xz.x) < GRID_AXIS_WIDTH {
+            return GRID_AXIS_X_COLOR;
+        }
+        if abs(xz.y) < GRID_AXIS_WIDTH {
+            return GRID_AXIS_Z_COLOR;
+        }
+        let coord = xz / GRID_CELL_SIZE;
+
+        // distance to nearest cell center
+        let fx = abs(fract(coord.x) - 0.5);
+        let fz = abs(fract(coord.y) - 0.5);
+
+        if fx < GRID_LINE_WIDTH || fz < GRID_LINE_WIDTH {
+            return GRID_LINE_COLOR;
+        }
     } else if mat_id == MAT_SPHERE {
         return MAT_SPHERE_COLOR;
     }
+
     return vec3<f32>(0.5, 0.5, 0.5);
 }
+
 
 // SDF Primitives
 fn sd_sphere(p: vec3<f32>, r: f32) -> f32 {
@@ -176,13 +253,6 @@ fn op_smooth_union(d1: f32, d2: f32, k: f32) -> f32 {
 // Scene description - returns (distance, material_id)
 fn get_dist(p: vec3<f32>) -> vec2<f32> {
     var res = vec2<f32>(MAX_DIST, -1.0);
-
-  // Ground plane
-    let plane_dist = sd_plane(p, vec3<f32>(0.0, 1.0, 0.0), 0.5);
-    if plane_dist < res.x {
-        res = vec2<f32>(plane_dist, MAT_PLANE);
-    }
-
     for (var i = 0u; i < u32(uniforms.objectCount); i++) {
         var obj_dist = MAX_DIST;
         let primitiveId = u32(objects[i].primitive);
