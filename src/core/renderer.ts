@@ -40,8 +40,10 @@ export class Renderer {
         this.device = params.device;
         this.context = params.context;
         this.format = params.format;
-
         this.initPipelineAndBuffers();
+        const cube0 = new SceneObject({ name: "cube0"});
+        this.addObject(cube0);
+
     }
     
     getObjectCount(): number {
@@ -217,7 +219,7 @@ export class Renderer {
     const data = new Float32Array(Renderer.GLOBALS_WPAD_SIZE_BYTES / 4);
 
     data.set(this.lastGlobals.resolution ?? [0, 0], 0);
-    data.set(this.lastGlobals.camPos ?? [0, 2, 4], 4);
+    data.set(this.lastGlobals.camPos ?? [0, 3, 4], 4);
     data.set(this.lastGlobals.camFwd ?? [0, 0, -1], 8);
     data.set(this.lastGlobals.camRight ?? [1, 0, 0], 12);
     data.set(this.lastGlobals.camUp ?? [0, 1, 0], 16);

@@ -6,7 +6,7 @@ export const PrimitiveType = {
     SPHERE: 0,
     ELLIPSOID: 0,
 
-    BOX: 1,
+    CUBE: 1,
     CUBOID: 1,
 
     TORUS: 2,
@@ -46,9 +46,9 @@ export class Object {
     }) {
         this.name = params.name ?? String(this.id);
         this.primitive = params.primitive ?? PrimitiveType.SPHERE;
-        this.position = params.position ?? vec3.fromValues(0,0,0);
+        this.position = params.position ?? vec3.fromValues(0,0.5,0);
         this.rotation = params.rotation ?? vec3.fromValues(0, 0, 0);
-        this.scale = params.scale ?? vec3.fromValues(1, 1, 1);
+        this.scale = params.scale ?? vec3.fromValues(0.5, 0.5, 0.5);
         this.color = params.color ?? vec3.fromValues(1, 1, 1);
     }
 
@@ -57,6 +57,9 @@ export class Object {
     updateObject(): void {
         
         if (!this.primitive) this.primitive = PrimitiveType.SPHERE;
+        if (!this.position) this.position = vec3.fromValues(0, 1, 0);
+        if (!this.scale) this.scale = vec3.fromValues(0.5, 0.5, 0.5);
+        if (!this.color) this.color = vec3.fromValues(1, 1, 1);
 
         const data = new Float32Array(Object.OBJECT_GPU_WPAD_SIZE_BYTES / 4);
 

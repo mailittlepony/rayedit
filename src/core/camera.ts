@@ -2,7 +2,7 @@
 import { vec3 } from "gl-matrix";
 
 export class Camera {
-    position: vec3 = vec3.fromValues(0, 2, 4);
+    position: vec3 = vec3.fromValues(2, 3, 6);
     target: vec3   = vec3.fromValues(0, 0, 0);
     up: vec3       = vec3.fromValues(0, 1, 0);
 

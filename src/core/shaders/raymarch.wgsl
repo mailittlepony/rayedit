@@ -1,18 +1,18 @@
 struct Globals {
-    resolution : vec2<f32>, 
-    _pad0      : vec2<f32>,
-    camPos     : vec3<f32>, 
-    _pad1      : f32,
-    camFwd     : vec3<f32>,
-    _pad2      : f32,     
-    camRight   : vec3<f32>,
-    _pad3      : f32,     
-    camUp      : vec3<f32>, 
-    _pad4      : f32,
-    time       : f32,      
-    deltaTime  : f32,     
-    objectCount: f32,    
-    _pad5      : f32,   
+    resolution: vec2<f32>,
+    _pad0: vec2<f32>,
+    camPos: vec3<f32>,
+    _pad1: f32,
+    camFwd: vec3<f32>,
+    _pad2: f32,
+    camRight: vec3<f32>,
+    _pad3: f32,
+    camUp: vec3<f32>,
+    _pad4: f32,
+    time: f32,
+    deltaTime: f32,
+    objectCount: f32,
+    _pad5: f32,
 };
 
 
@@ -20,16 +20,12 @@ struct Object {
     id: f32,
     primitive: f32,
     _pad0: vec2<f32>,
-
     position: vec3<f32>,
     _pad1: f32,
-
     rotation: vec3<f32>,
     _pad2: f32,
-
     scale: vec3<f32>,
     _pad3: f32,
-
     color: vec3<f32>,
     _pad4: f32,
 };
@@ -53,14 +49,10 @@ fn vs_main(@location(0) pos: vec2<f32>) -> VSOut {
 
 @fragment
 fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
-    let uv = (fragCoord.xy - uniforms.resolution * 0.5) 
-           / min(uniforms.resolution.x, uniforms.resolution.y);
+    let uv = (fragCoord.xy - uniforms.resolution * 0.5) / min(uniforms.resolution.x, uniforms.resolution.y);
     
     // Camera target
     let cam_target = vec3<f32>(0.0, 0.0, 0.0);
-
-    // Distance from camera to target
-    let cam_radius = 4.0;
 
     // Spherical - Cartesian using yaw/pitch
     let cam_pos = uniforms.camPos;
@@ -68,7 +60,7 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
     let cam_right = uniforms.camRight;
     let cam_up = uniforms.camUp;
 
-    let focal_length = 1.5;
+    let focal_length = 1.0;
     let rd = normalize(cam_right * uv.x - cam_up * uv.y + cam_forward * focal_length);
 
     // Ray march
@@ -93,12 +85,10 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
                     if abs(xz.x) < GRID_AXIS_WIDTH {
                         gridColor = GRID_AXIS_X_COLOR;
                         hasGrid = true;
-                    }
-                    else if abs(xz.y) < GRID_AXIS_WIDTH {
+                    } else if abs(xz.y) < GRID_AXIS_WIDTH {
                         gridColor = GRID_AXIS_Z_COLOR;
                         hasGrid = true;
-                    }
-                    else {
+                    } else {
                         // Normal grid lines
                         let coord = xz / GRID_CELL_SIZE;
                         let fx = abs(fract(coord.x) - 0.5);
@@ -164,13 +154,8 @@ const MAX_DIST: f32 = 100.0;
 const SURF_DIST: f32 = 0.001;
 const MAX_STEPS: i32 = 256;
 
-// Material Types
-const MAT_PLANE: f32 = 0.0;
-const MAT_SPHERE: f32 = 1.0;
-
 // Material Colors
 const MAT_SKY_COLOR: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
-const MAT_SPHERE_COLOR: vec3<f32> = vec3<f32>(1.0, 0.3, 0.3);
 
 // Grid settings
 const GRID_HEIGHT     : f32 = 0.0;
@@ -187,35 +172,15 @@ const GRID_AXIS_Z_COLOR  : vec3<f32> = vec3<f32>(0.1, 1.0, 0.1);
 
 
 fn get_material_color(mat_id: f32, p: vec3<f32>) -> vec3<f32> {
-    if mat_id == MAT_PLANE {
-        let xz = p.xz;
-        // Axis lines 
-        if abs(xz.x) < GRID_AXIS_WIDTH {
-            return GRID_AXIS_X_COLOR;
-        }
-        if abs(xz.y) < GRID_AXIS_WIDTH {
-            return GRID_AXIS_Z_COLOR;
-        }
-        let coord = xz / GRID_CELL_SIZE;
-
-        // distance to nearest cell center
-        let fx = abs(fract(coord.x) - 0.5);
-        let fz = abs(fract(coord.y) - 0.5);
-
-        if fx < GRID_LINE_WIDTH || fz < GRID_LINE_WIDTH {
-            return GRID_LINE_COLOR;
-        }
-    } else if mat_id == MAT_SPHERE {
-        return MAT_SPHERE_COLOR;
-    }
-
-    return vec3<f32>(0.5, 0.5, 0.5);
+    return objects[u32(mat_id)].color;
 }
 
 
 // SDF Primitives
-fn sd_sphere(p: vec3<f32>, r: f32) -> f32 {
-    return length(p) - r;
+fn sd_ellipsoid(p: vec3<f32>, r: vec3<f32>) -> f32 {
+    let k0 = length(p / r);
+    let k1 = length(p / (r * r));
+    return k0 * (k0-1.0)/k1;
 }
 
 fn sd_box(p: vec3<f32>, b: vec3<f32>) -> f32 {
@@ -226,6 +191,22 @@ fn sd_box(p: vec3<f32>, b: vec3<f32>) -> f32 {
 fn sd_torus(p: vec3<f32>, t: vec2<f32>) -> f32 {
     let q = vec2<f32>(length(p.xz) - t.x, p.y);
     return length(q) - t.y;
+}
+
+fn sd_cylinder(p: vec3<f32>, r: f32, h: f32) -> f32 {
+    let d = abs(vec2<f32>(length(p.xz), p.y)) - vec2<f32>(r, h);
+    return min(max(d.x, d.y), 0.0) + length(max(d, vec2<f32>(0.0, 0.0)));
+}
+
+fn sd_cone(p: vec3<f32>, c: vec2<f32>, h: f32) -> f32 {
+    let q = length(p.xz);
+    return max(dot(c, vec2<f32>(q, p.y)), -h - p.y);
+}
+
+fn sd_capsule(p: vec3<f32>, h: f32, r: f32) -> f32 {
+    var q = p;
+    q.y = q.y - clamp(q.y, 0.0, h);
+    return length(q) - r;
 }
 
 fn sd_plane(p: vec3<f32>, n: vec3<f32>, h: f32) -> f32 {
@@ -254,17 +235,33 @@ fn op_smooth_union(d1: f32, d2: f32, k: f32) -> f32 {
 fn get_dist(p: vec3<f32>) -> vec2<f32> {
     var res = vec2<f32>(MAX_DIST, -1.0);
     for (var i = 0u; i < u32(uniforms.objectCount); i++) {
+        var q = p - objects[i].position;
+        if objects[i].rotation.x != 0.0 {
+            q = rotateX(q, objects[i].rotation.x);
+        }
+        if objects[i].rotation.y != 0.0 {
+            q = rotateY(q, objects[i].rotation.y);
+        }
+        if objects[i].rotation.z != 0.0 {
+            q = rotateZ(q, objects[i].rotation.z);
+        }
         var obj_dist = MAX_DIST;
         let primitiveId = u32(objects[i].primitive);
         if primitiveId == 0u {
-            obj_dist = sd_sphere(p - objects[i].position, objects[i].scale.x);
+            obj_dist = sd_ellipsoid(q, objects[i].scale);
         } else if primitiveId == 1u {
-            obj_dist = sd_box(p - objects[i].position, objects[i].scale);
+            obj_dist = sd_box(q, objects[i].scale);
         } else if primitiveId == 2u {
-            obj_dist = sd_torus(p - objects[i].position, objects[i].scale.xy);
+            obj_dist = sd_torus(q, objects[i].scale.xy);
+        } else if primitiveId == 3u {
+            obj_dist = sd_cylinder(q, objects[i].scale.x, objects[i].scale.y);
+        } else if primitiveId == 4u {
+            obj_dist = sd_cone(q, objects[i].scale.xy, objects[i].scale.z);
+        } else if primitiveId == 5u {
+            obj_dist = sd_capsule(q, objects[i].scale.x, objects[i].scale.y);
         }
         if obj_dist < res.x {
-            res = vec2<f32>(obj_dist, MAT_SPHERE);
+            res = vec2<f32>(obj_dist, f32(i));
         }
     }
 
@@ -301,3 +298,33 @@ fn get_normal(p: vec3<f32>) -> vec3<f32> {
     return normalize(n);
 }
 
+
+fn rotateX(p: vec3<f32>, a: f32) -> vec3<f32> {
+    let c = cos(a);
+    let s = sin(a);
+    return vec3<f32>(
+        p.x,
+        c * p.y - s * p.z,
+        s * p.y + c * p.z
+    );
+}
+
+fn rotateY(p: vec3<f32>, a: f32) -> vec3<f32> {
+    let c = cos(a);
+    let s = sin(a);
+    return vec3<f32>(
+        c * p.x + s * p.z,
+        -s * p.x + c * p.z,
+        p.y
+    );
+}
+
+fn rotateZ(p: vec3<f32>, a: f32) -> vec3<f32> {
+    let c = cos(a);
+    let s = sin(a);
+    return vec3<f32>(
+        c * p.x - s * p.y,
+        s * p.x + c * p.y,
+        p.z
+    );
+}

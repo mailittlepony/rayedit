@@ -119,25 +119,27 @@ resize();
 window.addEventListener("resize", resize);
 
 
-// --- Schene objects ---
-const boule = new Object({
-    name: "Maili",
-    primitive: PrimitiveType.TORUS,
-    position: [-1, 0, 0] as any,
-    scale: [0.5, 0.2, 1.0] as any,
-});
+//--- Schene objects ---
+// const boule = new Object({
+//     name: "Maili",
+//     primitive: PrimitiveType.TORUS,
+//     position: [-1, 0, 0] as any,
+//     scale: [0.5, 0.2, 1.0] as any,
+// });
 
 const caca = new Object({
     name: "Maili",
-    primitive: PrimitiveType.CUBOID,
-    position: [1, 0, 0] as any,
-    scale: [0.5, 0.2, 1.0] as any,
+    primitive: PrimitiveType.CYLINDER,
+    position: [3, 0.5, 0] as any,
+    rotation: [1, 0, 0],
+    scale: [0.5, 1, 1.0] as any,
+    color: [1, 0, 0],
 });
 
-renderer.addObject(boule);
+// renderer.addObject(boule);
 renderer.addObject(caca);
 
-caca.position[0] -= 2;
+// caca.position[0] -= 2;
 caca.updateObject();
 
 
