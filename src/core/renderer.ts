@@ -41,9 +41,6 @@ export class Renderer {
         this.context = params.context;
         this.format = params.format;
         this.initPipelineAndBuffers();
-        const cube0 = new SceneObject({ name: "cube0"});
-        this.addObject(cube0);
-
     }
     
     getObjectCount(): number {
@@ -196,7 +193,7 @@ export class Renderer {
         anyObj._device = this.device;
         anyObj._objectBuffer = this.objectsBuffer;
 
-        obj.updateObject();
+        obj.update();
 
         this.updateGlobals({ objectCount: this.objects.length });
     }
@@ -204,7 +201,7 @@ export class Renderer {
     updateObjectOnGPU(id: number) {
         const obj = this.objects[id];
         if (!obj) throw new Error("Object id does not exist");
-        obj.updateObject();
+        obj.update();
     }
 
 

@@ -1,0 +1,67 @@
+/*
+ * panels.css
+ * Copyright (C) 2025 mailitg
+ *
+ * Distributed under terms of the MIT license.
+ */
+
+#left {
+    display: grid;
+    grid-template-rows: 1fr auto; 
+    height: 100%;
+    overflow: hidden;
+}
+
+#scene {
+    background: #111;
+    overflow: hidden;
+    position: relative;
+}
+
+#scene canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#toolbox {
+    background: #222;
+    border-top: 1px solid #333;
+    padding: 8px;
+    height: 200px; 
+    overflow-y: auto;
+}
+
+/* RIGHT COLUMN */
+#right {
+    display: grid;
+    grid-template-rows: auto 1fr auto; 
+    height: 100%;
+    border-left: 1px solid #333;
+    overflow: hidden;
+}
+
+/* Scene Manager Panel */
+#scene-manager {
+    background: #191919;
+    padding: 8px;
+    border-bottom: 1px solid #333;
+    height: 150px; 
+    overflow-y: auto;
+}
+
+/* Properties Panel */
+#properties {
+    background: #202020;
+    padding: 8px;
+    overflow-y: auto;
+}
+
+/* Code Editor Placeholder (for later tabs) */
+#code-editor {
+    background: #181818;
+    border-top: 1px solid #333;
+    height: 200px;
+    overflow: hidden;
+}
+

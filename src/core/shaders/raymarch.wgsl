@@ -91,8 +91,12 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
                     } else {
                         // Normal grid lines
                         let coord = xz / GRID_CELL_SIZE;
-                        let fx = abs(fract(coord.x) - 0.5);
-                        let fz = abs(fract(coord.y) - 0.5);
+                        let fx_raw = fract(coord.x);
+                        let fx = min(fx_raw, 1.0 - fx_raw); 
+
+                        let fz_raw = fract(coord.y);
+                        let fz = min(fz_raw, 1.0 - fz_raw);
+
 
                         if fx < GRID_LINE_WIDTH || fz < GRID_LINE_WIDTH {
                             gridColor = GRID_LINE_COLOR;

@@ -54,13 +54,7 @@ export class Object {
 
     get id() { return this._id; }
 
-    updateObject(): void {
-        
-        if (!this.primitive) this.primitive = PrimitiveType.SPHERE;
-        if (!this.position) this.position = vec3.fromValues(0, 1, 0);
-        if (!this.scale) this.scale = vec3.fromValues(0.5, 0.5, 0.5);
-        if (!this.color) this.color = vec3.fromValues(1, 1, 1);
-
+    update(): void {
         const data = new Float32Array(Object.OBJECT_GPU_WPAD_SIZE_BYTES / 4);
 
         data.set([this._id!, this.primitive], 0)

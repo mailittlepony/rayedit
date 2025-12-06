@@ -1,13 +1,15 @@
 
-import "./style.css";
+import "./styles/style.css";
+import "./styles/panels.css";
 import { Renderer } from "./core/renderer";
 import { Object, PrimitiveType } from "./core/object";
 import { Camera } from "./core/camera";
+import { ScenePanel } from "./ui/panels";
 
 
 // --- WebGPU init ---
 async function initWebGPU(canvas: HTMLCanvasElement)
-: Promise<{ context: GPUCanvasContext; device: GPUDevice; format: GPUTextureFormat }> {
+    : Promise<{ context: GPUCanvasContext; device: GPUDevice; format: GPUTextureFormat }> {
 
     if (!navigator.gpu) {
         throw Error("WebGPU not supported.");
@@ -38,11 +40,14 @@ async function initWebGPU(canvas: HTMLCanvasElement)
 
 
 // --- Globals ---
-const app = document.querySelector("#app")! as HTMLDivElement;
+const sceneRoot = document.getElementById("scene");
+if (!sceneRoot) throw new Error("#scene not found");
 
-const canvas = document.createElement("canvas");
-app.appendChild(canvas);
+const scenePanel = new ScenePanel(sceneRoot);
+scenePanel.init();
+scenePanel.loaded();
 
+const canvas = scenePanel.canvas;
 const { device, context, format } = await initWebGPU(canvas);
 
 const renderer = new Renderer({ device, context, format });
@@ -58,15 +63,15 @@ canvas.addEventListener("mousedown", (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
     lastMouse = [e.clientX - rect.left, e.clientY - rect.top];
 
-    if (e.button === 0) isLeftDown  = true; 
-    if (e.button === 2) isRightDown = true; 
+    if (e.button === 0) isLeftDown = true;
+    if (e.button === 2) isRightDown = true;
 
     // Disable right-click menu
     if (e.button === 2) e.preventDefault();
 });
 
 canvas.addEventListener("mouseup", (e: MouseEvent) => {
-    if (e.button === 0) isLeftDown  = false;
+    if (e.button === 0) isLeftDown = false;
     if (e.button === 2) isRightDown = false;
 });
 
@@ -108,9 +113,7 @@ canvas.addEventListener("wheel", (e: WheelEvent) => {
 
 // --- Resize handling ---
 function resize() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
+    scenePanel.resize();
     renderer.updateGlobals({
         resolution: [canvas.width, canvas.height] as any,
     });
@@ -120,35 +123,21 @@ window.addEventListener("resize", resize);
 
 
 //--- Schene objects ---
-// const boule = new Object({
-//     name: "Maili",
-//     primitive: PrimitiveType.TORUS,
-//     position: [-1, 0, 0] as any,
-//     scale: [0.5, 0.2, 1.0] as any,
-// });
-
-const caca = new Object({
-    name: "Maili",
-    primitive: PrimitiveType.CYLINDER,
-    position: [3, 0.5, 0] as any,
-    rotation: [1, 0, 0],
-    scale: [0.5, 1, 1.0] as any,
-    color: [1, 0, 0],
+const sphere0 = new Object({
+    name: "Sphere0",
+    primitive: PrimitiveType.SPHERE,
+    position: [0, 0.5, 0] as any,
+    scale: [0.5, 0.5, 0.5] as any,
 });
 
-// renderer.addObject(boule);
-renderer.addObject(caca);
-
-// caca.position[0] -= 2;
-caca.updateObject();
-
+renderer.addObject(sphere0);
 
 // --- Animation loop ---
 let lastTime = performance.now();
 
 function animate(now: number) {
-    const t = now / 1000;                   
-    const dt = (now - lastTime) / 1000;    
+    const t = now / 1000;
+    const dt = (now - lastTime) / 1000;
     lastTime = now;
 
     renderer.updateGlobals({
@@ -168,4 +157,3 @@ function animate(now: number) {
 }
 
 requestAnimationFrame(animate);
-
