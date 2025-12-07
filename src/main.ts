@@ -4,7 +4,7 @@ import "./styles/panels.css";
 import { Renderer } from "./core/renderer";
 import { Object, PrimitiveType } from "./core/object";
 import { Camera } from "./core/camera";
-import { ScenePanel } from "./ui/panels";
+import { SceneManagerPanel, ScenePanel, type SceneItem } from "./ui/panels";
 
 
 // --- WebGPU init ---
@@ -40,12 +40,16 @@ async function initWebGPU(canvas: HTMLCanvasElement)
 
 
 // --- Globals ---
-const sceneRoot = document.getElementById("scene");
-if (!sceneRoot) throw new Error("#scene not found");
+const sceneRoot = document.getElementById("scene")!;
 
 const scenePanel = new ScenePanel(sceneRoot);
 scenePanel.init();
 scenePanel.loaded();
+
+const sceneManagerRoot = document.getElementById("scene-manager")!;
+const sceneManagerPanel = new SceneManagerPanel(sceneManagerRoot);
+sceneManagerPanel.init();
+sceneManagerPanel.loaded();
 
 const canvas = scenePanel.canvas;
 const { device, context, format } = await initWebGPU(canvas);
@@ -122,15 +126,51 @@ resize();
 window.addEventListener("resize", resize);
 
 
-//--- Schene objects ---
-const sphere0 = new Object({
+//--- Scene objects ---
+addObject(new Object({
     name: "Sphere0",
     primitive: PrimitiveType.SPHERE,
     position: [0, 0.5, 0] as any,
     scale: [0.5, 0.5, 0.5] as any,
-});
+}));
 
-renderer.addObject(sphere0);
+addObject(new Object({
+    name: "LABITE",
+    primitive: PrimitiveType.CUBOID,
+    position: [-1, 0.5, 0] as any,
+    scale: [0.5, 0.5, 0.5] as any,
+}));
+
+
+function onClickItem(item: SceneItem) {
+    const obj = item.data as Object;
+
+    renderer.selectObject(obj);
+}
+function onDeleteItem(item: SceneItem) {
+    const obj = item.data as Object;
+
+    renderer.removeObject(obj);
+
+}
+function onLeaveItem(_: SceneItem) {
+    renderer.selectObject(null);
+}
+
+function addObject(obj: Object) {
+    renderer.addObject(obj);
+
+    const item = {
+        text: obj.name,
+        data: obj,
+        onClick: onClickItem,
+        onLeave: onLeaveItem,
+        onDelete: onDeleteItem,
+    } as SceneItem;
+
+    sceneManagerPanel.addItem(item);
+}
+
 
 // --- Animation loop ---
 let lastTime = performance.now();

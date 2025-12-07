@@ -3,6 +3,7 @@ import raymarchWGSL from "./shaders/raymarch.wgsl?raw";
 import type { vec2, vec3 } from "gl-matrix";
 import { Object as SceneObject } from "./object";
 
+
 export type Globals = {
     resolution?: vec2;
 
@@ -27,6 +28,9 @@ export class Renderer {
     private vertexBuffer!: GPUBuffer;
     private globalsBuffer!: GPUBuffer;
     private objectsBuffer!: GPUBuffer;
+    private activeObjectBuffer!: GPUBuffer;
+    private activeObjectStagingBuffer!: GPUBuffer;
+
     private renderPipeline!: GPURenderPipeline;
 
     private lastGlobals: Globals = {};
@@ -42,7 +46,7 @@ export class Renderer {
         this.format = params.format;
         this.initPipelineAndBuffers();
     }
-    
+
     getObjectCount(): number {
         return this.objects.length;
     }
@@ -54,7 +58,7 @@ export class Renderer {
         const vertices = new Float32Array([
             -1.0, -1.0, // bottom-left
             3.0, -1.0, // bottom-right
-            -1.0,  3.0, // top-left
+            -1.0, 3.0, // top-left
         ]);
 
         this.vertexBuffer = device.createBuffer({
@@ -81,14 +85,29 @@ export class Renderer {
         // globals uniform buffer
         this.globalsBuffer = device.createBuffer({
             size: Renderer.GLOBALS_WPAD_SIZE_BYTES,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+        });
 
         // Objects storage buffer 
         this.objectsBuffer = device.createBuffer({
             size: SceneObject.OBJECT_GPU_WPAD_SIZE_BYTES * 1,
             usage:
-                GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
+                GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+        });
 
+        // Active object index buffers
+        this.activeObjectBuffer = device.createBuffer({
+            size: 4,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+        });
+        this.selectObject(null);
+
+        this.activeObjectStagingBuffer = device.createBuffer({
+            size: 4,
+            usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+        });
+
+        // Create pipeline
         const shader = device.createShaderModule({
             code: raymarchWGSL,
         });
@@ -115,6 +134,7 @@ export class Renderer {
             entries: [
                 { binding: 0, resource: { buffer: this.globalsBuffer } },
                 { binding: 1, resource: { buffer: this.objectsBuffer } },
+                { binding: 2, resource: { buffer: this.activeObjectBuffer } },
             ],
         });
     }
@@ -181,6 +201,7 @@ export class Renderer {
                 entries: [
                     { binding: 0, resource: { buffer: this.globalsBuffer } },
                     { binding: 1, resource: { buffer: this.objectsBuffer } },
+                    { binding: 2, resource: { buffer: this.activeObjectBuffer } },
                 ],
             });
         }
@@ -198,7 +219,47 @@ export class Renderer {
         this.updateGlobals({ objectCount: this.objects.length });
     }
 
-    updateObjectOnGPU(id: number) {
+    removeObject(obj: SceneObject): void {
+        if (obj.id != this.objects.length) {
+            const lastObj = this.objects[this.objects.length - 1];
+            (lastObj as any)._id = obj.id;
+            this.objects[obj.id] = lastObj;
+
+            const temp = this.device.createBuffer({
+                size: SceneObject.OBJECT_GPU_WPAD_SIZE_BYTES,
+                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC
+            });
+
+            const encoder = this.device.createCommandEncoder();
+            encoder.copyBufferToBuffer(
+                this.objectsBuffer,
+                (this.objects.length - 1) * SceneObject.OBJECT_GPU_WPAD_SIZE_BYTES,
+                temp,
+                0,
+                SceneObject.OBJECT_GPU_WPAD_SIZE_BYTES,
+            );
+            encoder.copyBufferToBuffer(
+                temp,
+                0,
+                this.objectsBuffer,
+                obj.id * SceneObject.OBJECT_GPU_WPAD_SIZE_BYTES,
+                SceneObject.OBJECT_GPU_WPAD_SIZE_BYTES,
+            );
+            this.device.queue.submit([encoder.finish()]);
+        }
+
+        this.objects.pop();
+        this.updateGlobals({
+            objectCount: this.objects.length
+        });
+
+    }
+
+    selectObject(obj: SceneObject | null): void {
+        this.device.queue.writeBuffer(this.activeObjectBuffer, 0, new Float32Array([obj?.id ?? -1]));
+    }
+
+    updateObjectOnGPU(id: number): void {
         const obj = this.objects[id];
         if (!obj) throw new Error("Object id does not exist");
         obj.update();
@@ -206,27 +267,27 @@ export class Renderer {
 
 
     updateGlobals(globals: Globals): void {
-    for (const key in globals) {
-        const value = globals[key as keyof Globals];
-        if (value !== undefined) {
-            this.lastGlobals[key as keyof Globals] = value;
+        for (const key in globals) {
+            const value = globals[key as keyof Globals];
+            if (value !== undefined) {
+                (this.lastGlobals as any)[key as keyof Globals] = value;
+            }
         }
-    }
 
-    const data = new Float32Array(Renderer.GLOBALS_WPAD_SIZE_BYTES / 4);
+        const data = new Float32Array(Renderer.GLOBALS_WPAD_SIZE_BYTES / 4);
 
-    data.set(this.lastGlobals.resolution ?? [0, 0], 0);
-    data.set(this.lastGlobals.camPos ?? [0, 3, 4], 4);
-    data.set(this.lastGlobals.camFwd ?? [0, 0, -1], 8);
-    data.set(this.lastGlobals.camRight ?? [1, 0, 0], 12);
-    data.set(this.lastGlobals.camUp ?? [0, 1, 0], 16);
-    data.set([
-        this.lastGlobals.time ?? 0,
-        this.lastGlobals.deltaTime ?? 0,
-        this.lastGlobals.objectCount ?? 0,
-    ], 20);
+        data.set(this.lastGlobals.resolution ?? [0, 0], 0);
+        data.set(this.lastGlobals.camPos ?? [0, 3, 4], 4);
+        data.set(this.lastGlobals.camFwd ?? [0, 0, -1], 8);
+        data.set(this.lastGlobals.camRight ?? [1, 0, 0], 12);
+        data.set(this.lastGlobals.camUp ?? [0, 1, 0], 16);
+        data.set([
+            this.lastGlobals.time ?? 0,
+            this.lastGlobals.deltaTime ?? 0,
+            this.lastGlobals.objectCount ?? 0,
+        ], 20);
 
-    this.device.queue.writeBuffer(this.globalsBuffer, 0, data);
+        this.device.queue.writeBuffer(this.globalsBuffer, 0, data);
     }
 
 }

@@ -36,6 +36,9 @@ var<uniform> uniforms : Globals;
 @group(0) @binding(1)
 var<storage, read> objects : array<Object>;
 
+@group(0) @binding(2)
+var<storage, read_write> activeObject: f32;
+
 struct VSOut {
     @builtin(position) position: vec4<f32>,
 };
@@ -176,7 +179,14 @@ const GRID_AXIS_Z_COLOR  : vec3<f32> = vec3<f32>(0.1, 1.0, 0.1);
 
 
 fn get_material_color(mat_id: f32, p: vec3<f32>) -> vec3<f32> {
-    return objects[u32(mat_id)].color;
+    let obj = objects[u32(mat_id)];
+    var color = obj.color;
+
+    if obj.id == activeObject {
+        color = mix(color, vec3<f32>(1.0, 0.0, 0.0), 0.4);
+    }
+
+    return color;
 }
 
 
