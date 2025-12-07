@@ -4,7 +4,10 @@ import "./styles/panels.css";
 import { Renderer } from "./core/renderer";
 import { Object, PrimitiveType } from "./core/object";
 import { Camera } from "./core/camera";
-import { SceneManagerPanel, ScenePanel, ToolboxPanel, PropertiesPanel, type SceneItem, type ToolItem } from "./ui/panels";
+import { ScenePanel } from "./ui/scene-panel";
+import { SceneManagerPanel, type SceneItem } from "./ui/scene-manager-panel";
+import { ToolboxPanel, type ToolItem } from "./ui/toolbox-panel";
+import { PropertiesPanel } from "./ui/properties-panel";
 
 
 // --- WebGPU init ---
@@ -74,6 +77,12 @@ function onClickItem(item: SceneItem) {
     propertiesPanel.setTarget(obj as any);
 }
 
+function onCopyItem(item: SceneItem) {
+    const obj = item.data as Object;
+
+    addObject(obj.copy());
+}
+
 function onDeleteItem(item: SceneItem) {
     const obj = item.data as Object;
 
@@ -85,7 +94,7 @@ function onLeaveItem() {
     propertiesPanel.setTarget(null);
 }
 
-function getNextObjectName(base: string, primitiveId: number, sceneItems: SceneItem[]): string {
+function getNextObjectName(base: string, _primitiveId: number, sceneItems: SceneItem[]): string {
     let maxIndex = -1;
 
     for (const item of sceneItems) {
@@ -116,7 +125,6 @@ toolboxPanel.onSelect = (tool) => {
     });
 
     addObject(obj);
-    propertiesPanel.setTarget(obj as any);
 }
 
 propertiesPanel.onFieldChange = (_field, obj) => {
@@ -206,21 +214,23 @@ addObject(new Object({
     primitive: PrimitiveType.SPHERE,
     position: [0, 0.5, 0] as any,
     scale: [0.5, 0.5, 0.5] as any,
-}));
+}), false);
 
-function addObject(obj: Object) {
+function addObject(obj: Object, active: boolean = true) {
     renderer.addObject(obj);
 
     const item = {
         text: obj.name,
         data: obj,
         onClick: onClickItem,
+        onCopy: onCopyItem,
         onActivate: onClickItem,
         onLeave: onLeaveItem,
         onDelete: onDeleteItem,
     } as SceneItem;
 
     sceneManagerPanel.addItem(item);
+    if (active) sceneManagerPanel.activateItem(item);
 }
 
 

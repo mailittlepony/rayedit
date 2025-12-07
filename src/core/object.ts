@@ -66,4 +66,16 @@ export class Object {
         this._device.queue.writeBuffer(this._objectBuffer, this._id! * Object.OBJECT_GPU_WPAD_SIZE_BYTES, data.buffer);
     }
 
+    copy(): Object {
+        const obj = new Object({
+            name: `${this.name}Copy`,
+            primitive: this.primitive,
+        })
+
+        vec3.copy(obj.position, this.position);
+        vec3.copy(obj.rotation, this.rotation);
+        vec3.copy(obj.scale, this.scale);
+
+        return obj;
+    }
 }

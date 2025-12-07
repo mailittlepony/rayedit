@@ -59,7 +59,8 @@
     display: flex;
     flex-direction: row;
     justify-content: space-between;
-    padding: 0.4rem;
+    align-items: center;
+    padding: 0 10px;
     margin-bottom: 0.4rem;
     background-color: #282828;
     border: 2px solid #333;
@@ -72,15 +73,27 @@
     color: white;
 }
 
-.scene-panel-item button {
-    background-color: #333;
-    color: white;
-    width: 1.2rem;
-    height: 1.2rem;
-}
-
 .scene-panel-item:hover {
     cursor: pointer;
+}
+
+.scene-panel-item .buttons {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.scene-panel-item .buttons .del-button:hover {
+    color: red;
+}
+
+.scene-panel-item .buttons .copy-button:hover {
+    color: yellow;
+}
+
+.scene-panel-item .buttons .copy-button {
+    font-size: 1.8rem;
 }
 
 #toolbox,
@@ -146,6 +159,9 @@
 .toolbox-icon {
     font-size: 20px;
     margin-bottom: 4px;
+    width: 100%;
+    aspect-ratio: 1/1;
+    object-fit: cover;
 }
 
 .toolbox-label {
