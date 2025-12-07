@@ -4,7 +4,7 @@ import "./styles/panels.css";
 import { Renderer } from "./core/renderer";
 import { Object, PrimitiveType } from "./core/object";
 import { Camera } from "./core/camera";
-import { SceneManagerPanel, ScenePanel, type SceneItem } from "./ui/panels";
+import { SceneManagerPanel, ScenePanel, ToolboxPanel, PropertiesPanel, type SceneItem, type ToolItem } from "./ui/panels";
 
 
 // --- WebGPU init ---
@@ -39,9 +39,8 @@ async function initWebGPU(canvas: HTMLCanvasElement)
 }
 
 
-// --- Globals ---
+// --- Panels ---
 const sceneRoot = document.getElementById("scene")!;
-
 const scenePanel = new ScenePanel(sceneRoot);
 scenePanel.init();
 scenePanel.loaded();
@@ -51,6 +50,81 @@ const sceneManagerPanel = new SceneManagerPanel(sceneManagerRoot);
 sceneManagerPanel.init();
 sceneManagerPanel.loaded();
 
+const toolboxRoot = document.getElementById("toolbox")!;
+const toolboxPanel = new ToolboxPanel(toolboxRoot);
+toolboxPanel.init();
+
+const propertiesRoot = document.getElementById("properties")!;
+const propertiesPanel = new PropertiesPanel(propertiesRoot);
+propertiesPanel.init();
+
+const tools: ToolItem[] = [
+    { id: PrimitiveType.SPHERE,   label: "Sphere" },
+    { id: PrimitiveType.CUBE,     label: "Cube" },
+    { id: PrimitiveType.TORUS,    label: "Torus" },
+    { id: PrimitiveType.CYLINDER, label: "Cylinder" },
+    { id: PrimitiveType.CONE,     label: "Cone" },
+    { id: PrimitiveType.CAPSULE,  label: "Capsule" },
+];
+
+function onClickItem(item: SceneItem) {
+    const obj = item.data as Object;
+
+    renderer.selectObject(obj);
+    propertiesPanel.setTarget(obj as any);
+}
+
+function onDeleteItem(item: SceneItem) {
+    const obj = item.data as Object;
+
+    renderer.removeObject(obj);
+
+}
+function onLeaveItem() {
+    renderer.selectObject(null);
+    propertiesPanel.setTarget(null);
+}
+
+function getNextObjectName(base: string, primitiveId: number, sceneItems: SceneItem[]): string {
+    let maxIndex = -1;
+
+    for (const item of sceneItems) {
+        const name = item.text; 
+        if (name.startsWith(base)) {
+            const suffix = name.slice(base.length);
+            const num = parseInt(suffix);
+            if (!isNaN(num)) {
+                maxIndex = Math.max(maxIndex, num);
+            }
+        }
+    }
+
+    return `${base}${maxIndex + 1}`;
+}
+
+toolboxPanel.setItems(tools);
+
+toolboxPanel.onSelect = (tool) => {
+    const base = tool.label.toLowerCase().replace(/\s+/g, "");
+    const nextName = getNextObjectName(base, tool.id, sceneManagerPanel.items);
+
+    const obj = new Object({
+        name:nextName, 
+        primitive: tool.id,
+        position: [0, 0.5, 0] as any,
+        scale: [0.5, 0.5, 0.5] as any,
+    });
+
+    addObject(obj);
+    propertiesPanel.setTarget(obj as any);
+}
+
+propertiesPanel.onFieldChange = (_field, obj) => {
+    (obj as any).update?.();   
+};
+
+
+// --- Globals ---
 const canvas = scenePanel.canvas;
 const { device, context, format } = await initWebGPU(canvas);
 
@@ -128,34 +202,11 @@ window.addEventListener("resize", resize);
 
 //--- Scene objects ---
 addObject(new Object({
-    name: "Sphere0",
+    name: "sphere0",
     primitive: PrimitiveType.SPHERE,
     position: [0, 0.5, 0] as any,
     scale: [0.5, 0.5, 0.5] as any,
 }));
-
-addObject(new Object({
-    name: "LABITE",
-    primitive: PrimitiveType.CUBOID,
-    position: [-1, 0.5, 0] as any,
-    scale: [0.5, 0.5, 0.5] as any,
-}));
-
-
-function onClickItem(item: SceneItem) {
-    const obj = item.data as Object;
-
-    renderer.selectObject(obj);
-}
-function onDeleteItem(item: SceneItem) {
-    const obj = item.data as Object;
-
-    renderer.removeObject(obj);
-
-}
-function onLeaveItem(_: SceneItem) {
-    renderer.selectObject(null);
-}
 
 function addObject(obj: Object) {
     renderer.addObject(obj);
@@ -164,6 +215,7 @@ function addObject(obj: Object) {
         text: obj.name,
         data: obj,
         onClick: onClickItem,
+        onActivate: onClickItem,
         onLeave: onLeaveItem,
         onDelete: onDeleteItem,
     } as SceneItem;

@@ -138,7 +138,21 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
         if hasGrid {
             return vec4<f32>(gridColor, 1.0);
         }
-        return vec4<f32>(gamma_correct(color), 1.0);
+        var finalColor = gamma_correct(color);
+
+        let objIndex = u32(result.y);
+        let obj = objects[objIndex];
+
+        if obj.id == activeObject {
+            let viewDir = normalize(cam_pos - hit_pos);
+            let ndv = abs(dot(normal, viewDir));
+            let rim = 1.0 - ndv;
+            let rimMask = smoothstep(0.0, 1.0, rim);
+            let outlineColor = vec3<f32>(1.0, 1.0, 0.0);
+            finalColor = mix(finalColor, outlineColor, rimMask);
+        }
+
+        return vec4<f32>(gamma_correct(finalColor), 1.0);
     }
 
     // Sky gradient
@@ -181,11 +195,6 @@ const GRID_AXIS_Z_COLOR  : vec3<f32> = vec3<f32>(0.1, 1.0, 0.1);
 fn get_material_color(mat_id: f32, p: vec3<f32>) -> vec3<f32> {
     let obj = objects[u32(mat_id)];
     var color = obj.color;
-
-    if obj.id == activeObject {
-        color = mix(color, vec3<f32>(1.0, 0.0, 0.0), 0.4);
-    }
-
     return color;
 }
 
