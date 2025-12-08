@@ -1,6 +1,6 @@
 struct Globals {
     resolution: vec2<f32>,
-    _pad0: vec2<f32>,
+    mouse: vec2<f32>,
     camPos: vec3<f32>,
     _pad1: f32,
     camFwd: vec3<f32>,
@@ -12,7 +12,7 @@ struct Globals {
     time: f32,
     deltaTime: f32,
     objectCount: f32,
-    _pad5: f32,
+    activeObjectIdx: f32
 };
 
 
@@ -30,6 +30,13 @@ struct Object {
     _pad4: f32,
 };
 
+struct Collision {
+    t: f32,
+    index: f32,
+    _pad0: vec2<f32>,
+    position: vec3<f32>,
+};
+
 @group(0) @binding(0)
 var<uniform> uniforms : Globals;
 
@@ -37,7 +44,7 @@ var<uniform> uniforms : Globals;
 var<storage, read> objects : array<Object>;
 
 @group(0) @binding(2)
-var<storage, read_write> activeObject: f32;
+var<storage, read_write> collisionBuffer: Collision;
 
 struct VSOut {
     @builtin(position) position: vec4<f32>,
@@ -65,6 +72,19 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
 
     let focal_length = 1.0;
     let rd = normalize(cam_right * uv.x - cam_up * uv.y + cam_forward * focal_length);
+
+    // Convert to integer pixel coords
+    let frag_px = vec2<i32>(i32(fragCoord.x), i32(fragCoord.y));
+    let mouse_px = vec2<i32>(i32(uniforms.mouse.x), i32(uniforms.mouse.y));
+
+    if all(frag_px == mouse_px) {
+        var col: Collision;
+        let res = pick(cam_pos, rd);
+        col.t = res.z;
+        col.index = res.y;
+        col.position = cam_pos + rd * res.x;
+        collisionBuffer = col;
+    }
 
     // Ray march
     let result = ray_march(cam_pos, rd);
@@ -95,7 +115,7 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
                         // Normal grid lines
                         let coord = xz / GRID_CELL_SIZE;
                         let fx_raw = fract(coord.x);
-                        let fx = min(fx_raw, 1.0 - fx_raw); 
+                        let fx = min(fx_raw, 1.0 - fx_raw);
 
                         let fz_raw = fract(coord.y);
                         let fz = min(fz_raw, 1.0 - fz_raw);
@@ -143,7 +163,7 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
         let objIndex = u32(result.y);
         let obj = objects[objIndex];
 
-        if obj.id == activeObject {
+        if obj.id == uniforms.activeObjectIdx {
             let viewDir = normalize(cam_pos - hit_pos);
             let ndv = abs(dot(normal, viewDir));
             let rim = 1.0 - ndv;
@@ -190,6 +210,9 @@ const GRID_BG_COLOR      : vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
 const GRID_LINE_COLOR    : vec3<f32> = vec3<f32>(0.30, 0.30, 0.30);
 const GRID_AXIS_X_COLOR  : vec3<f32> = vec3<f32>(1.0, 0.1, 0.1);
 const GRID_AXIS_Z_COLOR  : vec3<f32> = vec3<f32>(0.1, 1.0, 0.1);
+
+const TYPE_OBJ = 0.0;
+const TYPE_GIZMO = 1.0;
 
 
 fn get_material_color(mat_id: f32, p: vec3<f32>) -> vec3<f32> {
@@ -254,9 +277,9 @@ fn op_smooth_union(d1: f32, d2: f32, k: f32) -> f32 {
     return mix(d2, d1, h) - k * h * (1.0 - h);
 }
 
-// Scene description - returns (distance, material_id)
-fn get_dist(p: vec3<f32>) -> vec2<f32> {
-    var res = vec2<f32>(MAX_DIST, -1.0);
+// Scene description - returns (distance, index)
+fn get_dist(p: vec3<f32>) -> vec3<f32> {
+    var res = vec3<f32>(MAX_DIST, -1.0, -1.0);
     for (var i = 0u; i < u32(uniforms.objectCount); i++) {
         var q = p - objects[i].position;
         if objects[i].rotation.x != 0.0 {
@@ -284,30 +307,56 @@ fn get_dist(p: vec3<f32>) -> vec2<f32> {
             obj_dist = sd_capsule(q, objects[i].scale.x, objects[i].scale.y);
         }
         if obj_dist < res.x {
-            res = vec2<f32>(obj_dist, f32(i));
+            res = vec3<f32>(obj_dist, f32(i), TYPE_OBJ);
         }
     }
 
     return res;
 }
 
-// Ray marching function - returns (distance, material_id)
+// Ray marching function - returns (distance, index)
 fn ray_march(ro: vec3<f32>, rd: vec3<f32>) -> vec2<f32> {
     var d = 0.0;
-    var mat_id = -1.0;
+    var id = -1.0;
 
     for (var i = 0; i < MAX_STEPS; i++) {
         let p = ro + rd * d;
         let dist_mat = get_dist(p);
         d += dist_mat.x;
-        mat_id = dist_mat.y;
+        id = dist_mat.y;
 
         if dist_mat.x < SURF_DIST || d > MAX_DIST {
-      break;
+            break;
         }
     }
 
-    return vec2<f32>(d, mat_id);
+    return vec2<f32>(d, id);
+}
+
+// Picking function - returns index
+fn pick(ro: vec3<f32>, rd: vec3<f32>) -> vec3<f32> {
+    var d = 0.0;
+    var id = -1.0;
+    var typ = -1.0;
+
+    for (var i = 0; i < MAX_STEPS; i++) {
+        let p = ro + rd * d;
+        let dist_mat = get_dist(p);
+
+        if dist_mat.x < SURF_DIST {
+            id = dist_mat.y;
+            typ = dist_mat.z;
+            break;
+        }
+
+        d += dist_mat.x;
+
+        if d > MAX_DIST {
+            break;
+        }
+    }
+
+    return vec3<f32>(d, id, typ);
 }
 
 // Calculate normal using gradient

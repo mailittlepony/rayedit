@@ -6,6 +6,7 @@ import { Object as SceneObject } from "./object";
 
 export type Globals = {
     resolution?: vec2;
+    mouse?: vec2;
 
     camPos?: vec3;
     camFwd?: vec3;
@@ -15,10 +16,19 @@ export type Globals = {
     time?: number;
     deltaTime?: number;
     objectCount?: number;
+    activeObjectIdx?: number;
 };
+
+export type Collision = {
+    type: "object" | "gizmo" | null;
+    index: number;
+    object: SceneObject | null;
+    position: vec3;
+}
 
 export class Renderer {
     static readonly GLOBALS_WPAD_SIZE_BYTES = 96;
+    static readonly COLLISION_WPAD_SIZE_BYTES = 32;
 
     private device: GPUDevice;
     private context: GPUCanvasContext;
@@ -28,8 +38,8 @@ export class Renderer {
     private vertexBuffer!: GPUBuffer;
     private globalsBuffer!: GPUBuffer;
     private objectsBuffer!: GPUBuffer;
-    private activeObjectBuffer!: GPUBuffer;
-    private activeObjectStagingBuffer!: GPUBuffer;
+    private collisionBuffer!: GPUBuffer;
+    private collisionStagingBuffer!: GPUBuffer;
 
     private renderPipeline!: GPURenderPipeline;
 
@@ -96,14 +106,14 @@ export class Renderer {
         });
 
         // Active object index buffers
-        this.activeObjectBuffer = device.createBuffer({
-            size: 4,
+        this.collisionBuffer = device.createBuffer({
+            size: Renderer.COLLISION_WPAD_SIZE_BYTES,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
         });
         this.selectObject(null);
 
-        this.activeObjectStagingBuffer = device.createBuffer({
-            size: 4,
+        this.collisionStagingBuffer = device.createBuffer({
+            size: Renderer.COLLISION_WPAD_SIZE_BYTES,
             usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
         });
 
@@ -134,7 +144,7 @@ export class Renderer {
             entries: [
                 { binding: 0, resource: { buffer: this.globalsBuffer } },
                 { binding: 1, resource: { buffer: this.objectsBuffer } },
-                { binding: 2, resource: { buffer: this.activeObjectBuffer } },
+                { binding: 2, resource: { buffer: this.collisionBuffer } },
             ],
         });
     }
@@ -201,7 +211,7 @@ export class Renderer {
                 entries: [
                     { binding: 0, resource: { buffer: this.globalsBuffer } },
                     { binding: 1, resource: { buffer: this.objectsBuffer } },
-                    { binding: 2, resource: { buffer: this.activeObjectBuffer } },
+                    { binding: 2, resource: { buffer: this.collisionBuffer } },
                 ],
             });
         }
@@ -255,8 +265,48 @@ export class Renderer {
 
     }
 
-    selectObject(obj: SceneObject | null): void {
-        this.device.queue.writeBuffer(this.activeObjectBuffer, 0, new Float32Array([obj?.id ?? -1]));
+    selectObject(obj: SceneObject | null): void {
+        // this.device.queue.writeBuffer(this.activeObjectBuffer, 0, new Float32Array([obj?.id ?? -1]));
+        this.updateGlobals({
+            activeObjectIdx: obj?.id ?? -1
+        });
+    }
+
+    async checkCollision(): Promise<Collision> {
+        const encoder = this.device.createCommandEncoder();
+        encoder.copyBufferToBuffer(
+            this.collisionBuffer,
+            0,
+            this.collisionStagingBuffer,
+            0,
+            Renderer.COLLISION_WPAD_SIZE_BYTES,
+        );
+
+        this.device.queue.submit([encoder.finish()]);
+
+        await this.collisionStagingBuffer.mapAsync(
+            GPUMapMode.READ,
+            0,
+            Renderer.COLLISION_WPAD_SIZE_BYTES,
+        );
+
+        const copyArrayBuffer = this.collisionStagingBuffer.getMappedRange(0, Renderer.COLLISION_WPAD_SIZE_BYTES);
+        const data = copyArrayBuffer.slice();
+        this.collisionStagingBuffer.unmap();
+        const dataArr = new Float32Array(data);
+
+        let type: "object" | "gizmo" | null = null;
+        if (dataArr[0] == 0) type = "object";
+        else if (dataArr[0] == 1) type = "gizmo";
+
+        const index = dataArr[1];
+
+        return {
+            type: type,
+            index: index,
+            object: this.objects[index] ?? null,
+            position: dataArr.slice(4, 7) as vec3,
+        };
     }
 
     updateObjectOnGPU(id: number): void {
@@ -277,6 +327,7 @@ export class Renderer {
         const data = new Float32Array(Renderer.GLOBALS_WPAD_SIZE_BYTES / 4);
 
         data.set(this.lastGlobals.resolution ?? [0, 0], 0);
+        data.set(this.lastGlobals.mouse ?? [0, 0], 2);
         data.set(this.lastGlobals.camPos ?? [0, 3, 4], 4);
         data.set(this.lastGlobals.camFwd ?? [0, 0, -1], 8);
         data.set(this.lastGlobals.camRight ?? [1, 0, 0], 12);
@@ -285,6 +336,7 @@ export class Renderer {
             this.lastGlobals.time ?? 0,
             this.lastGlobals.deltaTime ?? 0,
             this.lastGlobals.objectCount ?? 0,
+            this.lastGlobals.activeObjectIdx ?? 0,
         ], 20);
 
         this.device.queue.writeBuffer(this.globalsBuffer, 0, data);

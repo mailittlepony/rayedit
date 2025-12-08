@@ -85,7 +85,7 @@ export class PropertiesPanel extends Panel {
             input.value = v[idx].toString();
             input.className = "prop-input";
 
-            input.addEventListener("change", () => {
+            input.addEventListener("input", () => {
                 if (!this._target) return;
                 const val = parseFloat(input.value);
                 if (!Number.isNaN(val)) {

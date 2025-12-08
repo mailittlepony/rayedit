@@ -145,12 +145,22 @@ let isLeftDown = false;
 let isRightDown = false;
 let lastMouse: [number, number] = [0, 0];
 
-canvas.addEventListener("mousedown", (e: MouseEvent) => {
+canvas.addEventListener("mousedown", async (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
     lastMouse = [e.clientX - rect.left, e.clientY - rect.top];
 
     if (e.button === 0) isLeftDown = true;
     if (e.button === 2) isRightDown = true;
+
+    const col = await renderer.checkCollision();
+    console.log(col);
+    if (col.type == "object") {
+        const obj = col.object!;
+        const item = sceneManagerPanel.items.find((item) => item.data === obj) ?? null;
+        sceneManagerPanel.activateItem(item);
+    } else if (col.type == null) {
+        sceneManagerPanel.activateItem(null);
+    }
 
     // Disable right-click menu
     if (e.button === 2) e.preventDefault();
@@ -172,6 +182,10 @@ canvas.addEventListener("mousemove", (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+
+    renderer.updateGlobals({
+        mouse: [x, y]
+    })
 
     const dx = x - lastMouse[0];
     const dy = y - lastMouse[1];
