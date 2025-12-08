@@ -62,12 +62,12 @@ const propertiesPanel = new PropertiesPanel(propertiesRoot);
 propertiesPanel.init();
 
 const tools: ToolItem[] = [
-    { id: PrimitiveType.SPHERE,   label: "Sphere" },
-    { id: PrimitiveType.CUBE,     label: "Cube" },
-    { id: PrimitiveType.TORUS,    label: "Torus" },
+    { id: PrimitiveType.SPHERE, label: "Sphere" },
+    { id: PrimitiveType.CUBE, label: "Cube" },
+    { id: PrimitiveType.TORUS, label: "Torus" },
     { id: PrimitiveType.CYLINDER, label: "Cylinder" },
-    { id: PrimitiveType.CONE,     label: "Cone" },
-    { id: PrimitiveType.CAPSULE,  label: "Capsule" },
+    { id: PrimitiveType.CONE, label: "Cone" },
+    { id: PrimitiveType.CAPSULE, label: "Capsule" },
 ];
 
 function onClickItem(item: SceneItem) {
@@ -98,7 +98,7 @@ function getNextObjectName(base: string, _primitiveId: number, sceneItems: Scene
     let maxIndex = -1;
 
     for (const item of sceneItems) {
-        const name = item.text; 
+        const name = item.text;
         if (name.startsWith(base)) {
             const suffix = name.slice(base.length);
             const num = parseInt(suffix);
@@ -118,7 +118,7 @@ toolboxPanel.onSelect = (tool) => {
     const nextName = getNextObjectName(base, tool.id, sceneManagerPanel.items);
 
     const obj = new Object({
-        name:nextName, 
+        name: nextName,
         primitive: tool.id,
         position: [0, 0.5, 0] as any,
         scale: [0.5, 0.5, 0.5] as any,
@@ -128,7 +128,7 @@ toolboxPanel.onSelect = (tool) => {
 }
 
 propertiesPanel.onFieldChange = (_field, obj) => {
-    (obj as any).update?.();   
+    (obj as any).update?.();
 };
 
 
@@ -143,32 +143,44 @@ const camera = new Camera();
 // --- Mouse state ---
 let isLeftDown = false;
 let isRightDown = false;
+let gizmoAxe: number | null = null;
 let lastMouse: [number, number] = [0, 0];
+let lastClickPos: [number, number] = [0, 0];
 
-canvas.addEventListener("mousedown", async (e: MouseEvent) => {
+canvas.addEventListener("mousedown", (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
     lastMouse = [e.clientX - rect.left, e.clientY - rect.top];
+    lastClickPos = lastMouse;
 
     if (e.button === 0) isLeftDown = true;
     if (e.button === 2) isRightDown = true;
-
-    const col = await renderer.checkCollision();
-    console.log(col);
-    if (col.type == "object") {
-        const obj = col.object!;
-        const item = sceneManagerPanel.items.find((item) => item.data === obj) ?? null;
-        sceneManagerPanel.activateItem(item);
-    } else if (col.type == null) {
-        sceneManagerPanel.activateItem(null);
-    }
 
     // Disable right-click menu
     if (e.button === 2) e.preventDefault();
 });
 
-canvas.addEventListener("mouseup", (e: MouseEvent) => {
+canvas.addEventListener("mouseup", async (e: MouseEvent) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top;
     if (e.button === 0) isLeftDown = false;
     if (e.button === 2) isRightDown = false;
+
+    if (x > lastClickPos[0] - 5 && x < lastClickPos[0] + 5
+        && y > lastClickPos[1] - 5 && y < lastClickPos[1] + 5) {
+        const col = await renderer.checkCollision();
+        console.log(col);
+        if (col.type == "object") {
+            const obj = col.object!;
+            const item = sceneManagerPanel.items.find((item) => item.data === obj) ?? null;
+            sceneManagerPanel.activateItem(item);
+        } else if (col.type == "gizmo") {
+            gizmoAxe = col.index;
+        } else if (col.type == null) {
+            sceneManagerPanel.activateItem(null);
+            gizmoAxe = null;
+        }
+    }
 });
 
 canvas.addEventListener("mouseleave", () => {
@@ -195,8 +207,12 @@ canvas.addEventListener("mousemove", (e: MouseEvent) => {
     const panSpeed = 0.01;
 
     if (isLeftDown) {
-        camera.orbit(dx, dy, orbitSpeed);
-        camera.updateMatrices();
+        if (gizmoAxe != null) {
+
+        } else {
+            camera.orbit(dx, dy, orbitSpeed);
+            camera.updateMatrices();
+        }
     }
 
     if (isRightDown) {

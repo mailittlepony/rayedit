@@ -87,7 +87,11 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
     }
 
     // Ray march
-    let result = ray_march(cam_pos, rd);
+    var result = ray_march(cam_pos, rd, 0u);
+    let res_gizmo = ray_march(cam_pos, rd, 1u);
+    if res_gizmo.x < MAX_DIST {
+        result = res_gizmo;
+    }
 
    // grid overlay 
     var gridColor = vec3<f32>(0.0, 0.0, 0.0);
@@ -106,10 +110,10 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
 
                     // Axis lines
                     if abs(xz.x) < GRID_AXIS_WIDTH {
-                        gridColor = GRID_AXIS_X_COLOR;
+                        gridColor = GRID_AXIS_Z_COLOR;
                         hasGrid = true;
                     } else if abs(xz.y) < GRID_AXIS_WIDTH {
-                        gridColor = GRID_AXIS_Z_COLOR;
+                        gridColor = GRID_AXIS_X_COLOR;
                         hasGrid = true;
                     } else {
                         // Normal grid lines
@@ -143,12 +147,12 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
 
         // Shadow Casting
         let shadow_origin = hit_pos + normal * 0.01;
-        let shadow_result = ray_march(shadow_origin, light_dir);
+        let shadow_result = ray_march(shadow_origin, light_dir, 0u);
         let shadow = select(0.3, 1.0, shadow_result.x > length(light_pos - shadow_origin));
 
         // Phong Shading
         let ambient = 0.2;
-        var albedo = get_material_color(result.y, hit_pos);
+        var albedo = get_material_color(result.z, result.y, hit_pos);
         let phong = albedo * (ambient + diffuse * shadow * 0.8);
 
         // Exponential Fog
@@ -163,7 +167,7 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
         let objIndex = u32(result.y);
         let obj = objects[objIndex];
 
-        if obj.id == uniforms.activeObjectIdx {
+        if result.z == TYPE_OBJ && obj.id == uniforms.activeObjectIdx {
             let viewDir = normalize(cam_pos - hit_pos);
             let ndv = abs(dot(normal, viewDir));
             let rim = 1.0 - ndv;
@@ -194,6 +198,7 @@ fn gamma_correct(color: vec3<f32>) -> vec3<f32> {
 const MAX_DIST: f32 = 100.0;
 const SURF_DIST: f32 = 0.001;
 const MAX_STEPS: i32 = 256;
+const PI = 3.14159265358;
 
 // Material Colors
 const MAT_SKY_COLOR: vec3<f32> = vec3<f32>(0.05, 0.05, 0.05);
@@ -209,15 +214,25 @@ const GRID_AXIS_WIDTH : f32 = 0.01;
 const GRID_BG_COLOR      : vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);  
 const GRID_LINE_COLOR    : vec3<f32> = vec3<f32>(0.30, 0.30, 0.30);
 const GRID_AXIS_X_COLOR  : vec3<f32> = vec3<f32>(1.0, 0.1, 0.1);
-const GRID_AXIS_Z_COLOR  : vec3<f32> = vec3<f32>(0.1, 1.0, 0.1);
+const GRID_AXIS_Z_COLOR  : vec3<f32> = vec3<f32>(0.1, 0.1, 1.0);
 
 const TYPE_OBJ = 0.0;
 const TYPE_GIZMO = 1.0;
 
 
-fn get_material_color(mat_id: f32, p: vec3<f32>) -> vec3<f32> {
-    let obj = objects[u32(mat_id)];
-    var color = obj.color;
+fn get_material_color(typ: f32, id: f32, p: vec3<f32>) -> vec3<f32> {
+    var color: vec3<f32>;
+
+    if typ == TYPE_OBJ {
+        let obj = objects[u32(id)];
+        color = obj.color;
+    } else if typ == TYPE_GIZMO {
+        color[u32(id)] = 1.0;
+        if collisionBuffer.t == TYPE_GIZMO && collisionBuffer.index == id {
+            color = mix(color, vec3<f32>(0.9, 0.5, 0.0), 0.5);
+        }
+    }
+
     return color;
 }
 
@@ -240,13 +255,20 @@ fn sd_torus(p: vec3<f32>, t: vec2<f32>) -> f32 {
 }
 
 fn sd_cylinder(p: vec3<f32>, r: f32, h: f32) -> f32 {
-    let d = abs(vec2<f32>(length(p.xz), p.y)) - vec2<f32>(r, h);
+    let d = abs(vec2<f32>(length(p.xz), p.y)) - vec2<f32>(r, h / 2.0);
     return min(max(d.x, d.y), 0.0) + length(max(d, vec2<f32>(0.0, 0.0)));
 }
 
-fn sd_cone(p: vec3<f32>, c: vec2<f32>, h: f32) -> f32 {
-    let q = length(p.xz);
-    return max(dot(c, vec2<f32>(q, p.y)), -h - p.y);
+fn sd_cone(p: vec3<f32>, r: f32, h: f32) -> f32 {
+    // c = normalize( vec2(h, r) )
+    let hh = h * 2.0;
+    let invLen = inverseSqrt(hh * hh + r * r);
+    let c = vec2<f32>(hh * invLen, r * invLen);
+
+    let q = length(vec2<f32>(p.x, p.z));
+
+    // max( distance-to-side, distance-to-base-plane )
+    return max(dot(c, vec2<f32>(q, p.y - h)), -hh - p.y + h);
 }
 
 fn sd_capsule(p: vec3<f32>, h: f32, r: f32) -> f32 {
@@ -277,9 +299,12 @@ fn op_smooth_union(d1: f32, d2: f32, k: f32) -> f32 {
     return mix(d2, d1, h) - k * h * (1.0 - h);
 }
 
+
 // Scene description - returns (distance, index)
-fn get_dist(p: vec3<f32>) -> vec3<f32> {
+fn get_dist_obj(p: vec3<f32>) -> vec3<f32> {
     var res = vec3<f32>(MAX_DIST, -1.0, -1.0);
+
+    // Objects
     for (var i = 0u; i < u32(uniforms.objectCount); i++) {
         var q = p - objects[i].position;
         if objects[i].rotation.x != 0.0 {
@@ -302,7 +327,7 @@ fn get_dist(p: vec3<f32>) -> vec3<f32> {
         } else if primitiveId == 3u {
             obj_dist = sd_cylinder(q, objects[i].scale.x, objects[i].scale.y);
         } else if primitiveId == 4u {
-            obj_dist = sd_cone(q, objects[i].scale.xy, objects[i].scale.z);
+            obj_dist = sd_cone(q, objects[i].scale.x, objects[i].scale.y);
         } else if primitiveId == 5u {
             obj_dist = sd_capsule(q, objects[i].scale.x, objects[i].scale.y);
         }
@@ -314,23 +339,100 @@ fn get_dist(p: vec3<f32>) -> vec3<f32> {
     return res;
 }
 
+fn get_dist_gizmo(p: vec3<f32>) -> vec3<f32> {
+    var res = vec3<f32>(MAX_DIST, -1.0, -1.0);
+
+    if uniforms.activeObjectIdx < 0.0 {
+        return res;
+    }
+
+    let q = p - objects[u32(uniforms.activeObjectIdx)].position;
+
+    // Gizmos
+    // X Cone
+    let x_cone_pos = vec3<f32>(1.0, 0.0, 0.0);
+    let x_gizmo_cone_d = sd_cone(rotateZ(q - x_cone_pos, PI / 2.0), 0.08, 0.08);
+    if x_gizmo_cone_d < res.x {
+        res = vec3<f32>(x_gizmo_cone_d, 0.0, TYPE_GIZMO);
+    }
+
+    // X Axe
+    let x_gizmo_cyl_d = sd_cylinder(rotateZ(q - vec3<f32>(0.5, 0.0, 0.0), PI / 2.0), 0.02, 1.0);
+    if x_gizmo_cyl_d < res.x {
+        res = vec3<f32>(x_gizmo_cyl_d, 0.0, TYPE_GIZMO);
+    }
+    
+    // Y Cone
+    let y_cone_pos = vec3<f32>(0.0, 1.0, 0.0);
+    let y_gizmo_cone_d = sd_cone(q - y_cone_pos, 0.08, 0.08);
+    if y_gizmo_cone_d < res.x {
+        res = vec3<f32>(y_gizmo_cone_d, 1.0, TYPE_GIZMO);
+    }
+
+    // Y Axe
+    let y_gizmo_cyl_d = sd_cylinder(q - vec3<f32>(0.0, 0.5, 0.0), 0.02, 1.0);
+    if y_gizmo_cyl_d < res.x {
+        res = vec3<f32>(y_gizmo_cyl_d, 1.0, TYPE_GIZMO);
+    }
+
+    // Z Cone
+    let z_cone_pos = vec3<f32>(0.0, 0.0, 1.0);
+    let z_gizmo_d = sd_cone(rotateX(q - z_cone_pos, -PI / 2.0), 0.08, 0.08);
+    if z_gizmo_d < res.x {
+        res = vec3<f32>(z_gizmo_d, 2.0, TYPE_GIZMO);
+    }
+
+    // Z Axe
+    let z_gizmo_cyl_d = sd_cylinder(rotateX(q - vec3<f32>(0.0, 0.0, 0.5), PI / 2.0), 0.02, 1.0);
+    if z_gizmo_cyl_d < res.x {
+        res = vec3<f32>(z_gizmo_cyl_d, 2.0, TYPE_GIZMO);
+    }
+
+    return res;
+}
+
+fn get_dist(p: vec3<f32>) -> vec3<f32> {
+    var res = vec3<f32>(MAX_DIST, -1.0, -1.0);
+
+    let o = get_dist_obj(p);
+    if o.x < res.x {
+        res = o;
+    }
+
+    let g = get_dist_gizmo(p);
+    if g.x < res.x {
+        res = g;
+    }
+
+    return res;
+}
+
 // Ray marching function - returns (distance, index)
-fn ray_march(ro: vec3<f32>, rd: vec3<f32>) -> vec2<f32> {
+fn ray_march(ro: vec3<f32>, rd: vec3<f32>, mode: u32) -> vec3<f32> {
     var d = 0.0;
     var id = -1.0;
+    var typ = -1.0;
 
     for (var i = 0; i < MAX_STEPS; i++) {
         let p = ro + rd * d;
-        let dist_mat = get_dist(p);
+        var dist_mat: vec3<f32>;
+
+        if mode == 0u {
+            dist_mat = get_dist_obj(p);
+        } else if mode == 1u {
+            dist_mat = get_dist_gizmo(p);
+        }
+
         d += dist_mat.x;
         id = dist_mat.y;
+        typ = dist_mat.z;
 
         if dist_mat.x < SURF_DIST || d > MAX_DIST {
             break;
         }
     }
 
-    return vec2<f32>(d, id);
+    return vec3<f32>(d, id, typ);
 }
 
 // Picking function - returns index
