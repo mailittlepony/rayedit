@@ -79,7 +79,12 @@ fn fs_main(@builtin(position) fragCoord: vec4<f32>) -> @location(0) vec4<f32> {
 
     if all(frag_px == mouse_px) {
         var col: Collision;
-        let res = pick(cam_pos, rd);
+        var res = pick(cam_pos, rd, 0u);
+        let g_res = pick(cam_pos, rd, 1u);
+        if g_res.x < MAX_DIST {
+            res = g_res;
+        }
+
         col.t = res.z;
         col.index = res.y;
         col.position = cam_pos + rd * res.x;
@@ -227,7 +232,12 @@ fn get_material_color(typ: f32, id: f32, p: vec3<f32>) -> vec3<f32> {
         let obj = objects[u32(id)];
         color = obj.color;
     } else if typ == TYPE_GIZMO {
-        color[u32(id)] = 1.0;
+        if id == 3.0 {
+            color = vec3<f32>(1.0, 1.0, 1.0); 
+        } else {
+            color[u32(id)] = 1.0;
+
+        }
         if collisionBuffer.t == TYPE_GIZMO && collisionBuffer.index == id {
             color = mix(color, vec3<f32>(0.9, 0.5, 0.0), 0.5);
         }
@@ -345,45 +355,53 @@ fn get_dist_gizmo(p: vec3<f32>) -> vec3<f32> {
     if uniforms.activeObjectIdx < 0.0 {
         return res;
     }
-
+    
     let q = p - objects[u32(uniforms.activeObjectIdx)].position;
 
     // Gizmos
+    // center sphere
+    let gizmo_sphere = sd_ellipsoid(q, vec3<f32>(0.06));
+    if gizmo_sphere < res.x {
+        res = vec3<f32>(gizmo_sphere, 3.0, TYPE_GIZMO);
+    }
+
+
     // X Cone
-    let x_cone_pos = vec3<f32>(1.0, 0.0, 0.0);
-    let x_gizmo_cone_d = sd_cone(rotateZ(q - x_cone_pos, PI / 2.0), 0.08, 0.08);
+    let x_cone_pos = vec3<f32>(0.5, 0.0, 0.0);
+    let cone_size = vec2<f32>(0.04);
+    let x_gizmo_cone_d = sd_cone(rotateZ(q - x_cone_pos, PI / 2.0), 0.04, 0.04);
     if x_gizmo_cone_d < res.x {
         res = vec3<f32>(x_gizmo_cone_d, 0.0, TYPE_GIZMO);
     }
 
     // X Axe
-    let x_gizmo_cyl_d = sd_cylinder(rotateZ(q - vec3<f32>(0.5, 0.0, 0.0), PI / 2.0), 0.02, 1.0);
+    let x_gizmo_cyl_d = sd_cylinder(rotateZ(q - vec3<f32>(0.25, 0.0, 0.0), PI / 2.0), 0.02, 0.5);
     if x_gizmo_cyl_d < res.x {
         res = vec3<f32>(x_gizmo_cyl_d, 0.0, TYPE_GIZMO);
     }
     
     // Y Cone
-    let y_cone_pos = vec3<f32>(0.0, 1.0, 0.0);
-    let y_gizmo_cone_d = sd_cone(q - y_cone_pos, 0.08, 0.08);
+    let y_cone_pos = vec3<f32>(0.0, 0.5, 0.0);
+    let y_gizmo_cone_d = sd_cone(q - y_cone_pos, 0.04, 0.04);
     if y_gizmo_cone_d < res.x {
         res = vec3<f32>(y_gizmo_cone_d, 1.0, TYPE_GIZMO);
     }
 
     // Y Axe
-    let y_gizmo_cyl_d = sd_cylinder(q - vec3<f32>(0.0, 0.5, 0.0), 0.02, 1.0);
+    let y_gizmo_cyl_d = sd_cylinder(q - vec3<f32>(0.0, 0.25, 0.0), 0.02, 0.5);
     if y_gizmo_cyl_d < res.x {
         res = vec3<f32>(y_gizmo_cyl_d, 1.0, TYPE_GIZMO);
     }
 
     // Z Cone
-    let z_cone_pos = vec3<f32>(0.0, 0.0, 1.0);
-    let z_gizmo_d = sd_cone(rotateX(q - z_cone_pos, -PI / 2.0), 0.08, 0.08);
+    let z_cone_pos = vec3<f32>(0.0, 0.0, 0.5);
+    let z_gizmo_d = sd_cone(rotateX(q - z_cone_pos, -PI / 2.0), 0.04, 0.04);
     if z_gizmo_d < res.x {
         res = vec3<f32>(z_gizmo_d, 2.0, TYPE_GIZMO);
     }
 
     // Z Axe
-    let z_gizmo_cyl_d = sd_cylinder(rotateX(q - vec3<f32>(0.0, 0.0, 0.5), PI / 2.0), 0.02, 1.0);
+    let z_gizmo_cyl_d = sd_cylinder(rotateX(q - vec3<f32>(0.0, 0.0, 0.25), PI / 2.0), 0.02, 0.5);
     if z_gizmo_cyl_d < res.x {
         res = vec3<f32>(z_gizmo_cyl_d, 2.0, TYPE_GIZMO);
     }
@@ -436,14 +454,21 @@ fn ray_march(ro: vec3<f32>, rd: vec3<f32>, mode: u32) -> vec3<f32> {
 }
 
 // Picking function - returns index
-fn pick(ro: vec3<f32>, rd: vec3<f32>) -> vec3<f32> {
+fn pick(ro: vec3<f32>, rd: vec3<f32>, mode: u32) -> vec3<f32> {
     var d = 0.0;
     var id = -1.0;
     var typ = -1.0;
 
     for (var i = 0; i < MAX_STEPS; i++) {
         let p = ro + rd * d;
-        let dist_mat = get_dist(p);
+        // let dist_mat = get_dist(p);
+        var dist_mat: vec3<f32>;
+
+        if mode == 0u {
+            dist_mat = get_dist_obj(p);
+        } else if mode == 1u {
+            dist_mat = get_dist_gizmo(p);
+        }
 
         if dist_mat.x < SURF_DIST {
             id = dist_mat.y;

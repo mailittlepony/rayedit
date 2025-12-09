@@ -1,13 +1,14 @@
 
 import "./styles/style.css";
 import "./styles/panels.css";
-import { Renderer } from "./core/renderer";
+import { Renderer, type Collision } from "./core/renderer";
 import { Object, PrimitiveType } from "./core/object";
 import { Camera } from "./core/camera";
 import { ScenePanel } from "./ui/scene-panel";
 import { SceneManagerPanel, type SceneItem } from "./ui/scene-manager-panel";
 import { ToolboxPanel, type ToolItem } from "./ui/toolbox-panel";
 import { PropertiesPanel } from "./ui/properties-panel";
+import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 
 
 // --- WebGPU init ---
@@ -143,42 +144,85 @@ const camera = new Camera();
 // --- Mouse state ---
 let isLeftDown = false;
 let isRightDown = false;
-let gizmoAxe: number | null = null;
+let col: Collision | null;
 let lastMouse: [number, number] = [0, 0];
 let lastClickPos: [number, number] = [0, 0];
+let lastHitPos: vec3 = vec3.create();
 
-canvas.addEventListener("mousedown", (e: MouseEvent) => {
+let draggingAxis: 0 | 1 | 2 | null = null;
+let dragStartObjPos = vec3.create();
+let dragAxisWorld = vec3.create();
+let dragAxisScreenDir = vec2.create();
+let dragAmount = 0; 
+
+canvas.addEventListener("mousedown", async (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
-    lastMouse = [e.clientX - rect.left, e.clientY - rect.top];
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    lastMouse = [x, y];
     lastClickPos = lastMouse;
 
     if (e.button === 0) isLeftDown = true;
     if (e.button === 2) isRightDown = true;
-
-    // Disable right-click menu
     if (e.button === 2) e.preventDefault();
+
+    renderer.updateGlobals({ mouse: [x, y] });
+
+    col = renderer.checkCollision();
+    if (col) lastHitPos = col.position;
+
+    // ---- Gizmo drag ----
+    if (e.button === 0 && col && col.type === "gizmo") {
+        const obj = renderer.activeObject;
+        if (!obj) return;
+
+        camera.updateMatrices();
+
+        const axisIndex = col.index as 0 | 1 | 2;
+        draggingAxis = axisIndex;
+        dragAmount = 0;
+
+        vec3.copy(dragStartObjPos, obj.position);
+
+        vec3.set(dragAxisWorld, 0, 0, 0);
+        dragAxisWorld[axisIndex] = 1.0;
+
+        // project axis to screen camera base
+        const sx = vec3.dot(dragAxisWorld, camera.right);
+        const sy = -vec3.dot(dragAxisWorld, camera.upVec); 
+
+        vec2.set(dragAxisScreenDir, sx, sy);
+        const len = vec2.length(dragAxisScreenDir);
+        if (len < 1e-4) {
+            draggingAxis = null;
+            return;
+        }
+        vec2.scale(dragAxisScreenDir, dragAxisScreenDir, 1.0 / len);
+    }
+
 });
 
 canvas.addEventListener("mouseup", async (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top;
-    if (e.button === 0) isLeftDown = false;
+    if (e.button === 0){
+        isLeftDown = false;
+        draggingAxis = null;
+    }
     if (e.button === 2) isRightDown = false;
 
     if (x > lastClickPos[0] - 5 && x < lastClickPos[0] + 5
         && y > lastClickPos[1] - 5 && y < lastClickPos[1] + 5) {
-        const col = await renderer.checkCollision();
+        col = renderer.checkCollision();
         console.log(col);
-        if (col.type == "object") {
+        if (col?.type == "object") {
             const obj = col.object!;
             const item = sceneManagerPanel.items.find((item) => item.data === obj) ?? null;
             sceneManagerPanel.activateItem(item);
-        } else if (col.type == "gizmo") {
-            gizmoAxe = col.index;
-        } else if (col.type == null) {
+        }
+        else if (col?.type == null) {
             sceneManagerPanel.activateItem(null);
-            gizmoAxe = null;
         }
     }
 });
@@ -190,26 +234,38 @@ canvas.addEventListener("mouseleave", () => {
 
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
-canvas.addEventListener("mousemove", (e: MouseEvent) => {
+canvas.addEventListener("mousemove", async (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-
-    renderer.updateGlobals({
-        mouse: [x, y]
-    })
 
     const dx = x - lastMouse[0];
     const dy = y - lastMouse[1];
     lastMouse = [x, y];
 
+    renderer.updateGlobals({ mouse: [x, y] });
+
     const orbitSpeed = 0.005;
     const panSpeed = 0.01;
 
     if (isLeftDown) {
-        if (gizmoAxe != null) {
+        if (draggingAxis !== null) {
+            const obj = renderer.activeObject;
+            if (!obj) return;
 
+            // Project mouse movement on screen 
+            const delta2D = vec2.fromValues(dx, dy);
+            const delta1D = vec2.dot(delta2D, dragAxisScreenDir);
+            dragAmount += delta1D;
+
+            // Convert pixels to world units
+            const distance = vec3.distance(camera.position, dragStartObjPos);
+            const scale = distance * 0.002; 
+
+            vec3.scaleAndAdd(obj.position, dragStartObjPos, dragAxisWorld, dragAmount * scale);
+            obj.update();
         } else {
+            // no gizmo drag
             camera.orbit(dx, dy, orbitSpeed);
             camera.updateMatrices();
         }

@@ -56,10 +56,12 @@ export class Object {
 
     update(): void {
         const data = new Float32Array(Object.OBJECT_GPU_WPAD_SIZE_BYTES / 4);
+        const rotCpy = vec3.create();
+        vec3.scale(rotCpy, this.rotation, Math.PI/180);
 
         data.set([this._id!, this.primitive], 0)
         data.set(this.position ?? [0, 0, 0], 4);
-        data.set(this.rotation ?? [0, 0, 0], 8);
+        data.set(rotCpy ?? [0, 0, 0], 8);
         data.set(this.scale ?? [1, 1, 1], 12);
         data.set(this.color ?? [1, 1, 1], 16);
 
@@ -75,6 +77,7 @@ export class Object {
         vec3.copy(obj.position, this.position);
         vec3.copy(obj.rotation, this.rotation);
         vec3.copy(obj.scale, this.scale);
+        vec3.copy(obj.color, this.color);
 
         return obj;
     }

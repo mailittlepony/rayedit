@@ -81,7 +81,7 @@ export class PropertiesPanel extends Panel {
 
             const input = document.createElement("input");
             input.type = "number";
-            input.step = "0.1";
+            input.step = "0.5";
             input.value = v[idx].toString();
             input.className = "prop-input";
 

@@ -40,11 +40,15 @@ export class Renderer {
     private objectsBuffer!: GPUBuffer;
     private collisionBuffer!: GPUBuffer;
     private collisionStagingBuffer!: GPUBuffer;
+    private collisionPending: boolean = false;
+    private lastCollision: Collision | null = null;
 
     private renderPipeline!: GPURenderPipeline;
 
     private lastGlobals: Globals = {};
     private objects: SceneObject[] = [];
+    private _activeObject: SceneObject | null = null;
+    get activeObject() { return this._activeObject; }
 
     constructor(params: {
         device: GPUDevice;
@@ -171,6 +175,8 @@ export class Renderer {
 
         passEncoder.end();
         this.device.queue.submit([commandEncoder.finish()]);
+
+        this.readCollisionBuffer();
     }
 
     addObject(obj: SceneObject): void {
@@ -270,9 +276,18 @@ export class Renderer {
         this.updateGlobals({
             activeObjectIdx: obj?.id ?? -1
         });
+        this._activeObject = obj;
     }
 
-    async checkCollision(): Promise<Collision> {
+    checkCollision(): Collision | null {
+        return this.lastCollision;
+    }
+
+    async readCollisionBuffer(): Promise<void> {
+        if (this.collisionPending) {
+            return;
+        }
+
         const encoder = this.device.createCommandEncoder();
         encoder.copyBufferToBuffer(
             this.collisionBuffer,
@@ -282,6 +297,7 @@ export class Renderer {
             Renderer.COLLISION_WPAD_SIZE_BYTES,
         );
 
+        this.collisionPending = true;
         this.device.queue.submit([encoder.finish()]);
 
         await this.collisionStagingBuffer.mapAsync(
@@ -289,6 +305,8 @@ export class Renderer {
             0,
             Renderer.COLLISION_WPAD_SIZE_BYTES,
         );
+
+        this.collisionPending = false;
 
         const copyArrayBuffer = this.collisionStagingBuffer.getMappedRange(0, Renderer.COLLISION_WPAD_SIZE_BYTES);
         const data = copyArrayBuffer.slice();
@@ -301,12 +319,14 @@ export class Renderer {
 
         const index = dataArr[1];
 
-        return {
+        const col = {
             type: type,
             index: index,
             object: this.objects[index] ?? null,
             position: dataArr.slice(4, 7) as vec3,
         };
+
+        this.lastCollision = col;
     }
 
     updateObjectOnGPU(id: number): void {
