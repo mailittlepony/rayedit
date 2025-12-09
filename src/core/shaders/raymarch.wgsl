@@ -287,6 +287,12 @@ fn sd_capsule(p: vec3<f32>, h: f32, r: f32) -> f32 {
     return length(q) - r;
 }
 
+// SDF User-Custom - Begin
+fn sd_user_custom(p: vec3<f32>, scale: vec3<f32>) -> f32 {
+    return MAX_DIST;
+}
+// SDF User-Custom - End
+
 fn sd_plane(p: vec3<f32>, n: vec3<f32>, h: f32) -> f32 {
     return dot(p, n) + h;
 }
@@ -340,6 +346,8 @@ fn get_dist_obj(p: vec3<f32>) -> vec3<f32> {
             obj_dist = sd_cone(q, objects[i].scale.x, objects[i].scale.y);
         } else if primitiveId == 5u {
             obj_dist = sd_capsule(q, objects[i].scale.x, objects[i].scale.y);
+        } else if primitiveId == 6u {
+            obj_dist = sd_user_custom(q, objects[i].scale);
         }
         if obj_dist < res.x {
             res = vec3<f32>(obj_dist, f32(i), TYPE_OBJ);

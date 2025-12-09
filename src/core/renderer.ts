@@ -58,14 +58,13 @@ export class Renderer {
         this.device = params.device;
         this.context = params.context;
         this.format = params.format;
-        this.initPipelineAndBuffers();
     }
 
     getObjectCount(): number {
         return this.objects.length;
     }
 
-    private initPipelineAndBuffers() {
+    async init() {
         const { device } = this;
 
         //Fullscreen triangle vertex buffer
@@ -81,20 +80,6 @@ export class Renderer {
         });
 
         device.queue.writeBuffer(this.vertexBuffer, 0, vertices);
-
-        const vertexBuffers: GPUVertexBufferLayout[] = [
-            {
-                arrayStride: 2 * 4,
-                attributes: [
-                    {
-                        shaderLocation: 0,
-                        offset: 0,
-                        format: "float32x2",
-                    },
-                ],
-                stepMode: "vertex",
-            },
-        ];
 
         // globals uniform buffer
         this.globalsBuffer = device.createBuffer({
@@ -121,12 +106,46 @@ export class Renderer {
             usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
         });
 
+        await this.compileShader();
+    }
+
+    async compileShader(user_sdf?: string): Promise<readonly GPUCompilationMessage[]> {
+        const vertexBuffers: GPUVertexBufferLayout[] = [
+            {
+                arrayStride: 2 * 4,
+                attributes: [
+                    {
+                        shaderLocation: 0,
+                        offset: 0,
+                        format: "float32x2",
+                    },
+                ],
+                stepMode: "vertex",
+            },
+        ];
+
+        const splitShader1 = raymarchWGSL.split("// SDF User-Custom - Begin");
+        const splitShader2 = splitShader1[1].split("// SDF User-Custom - End");
+        const defaultUserSdf = splitShader2[0];
+        const topPartShader = splitShader1[0];
+        const bottomPartShader = splitShader2[1];
+
+        const insertedShder = topPartShader + (user_sdf ?? defaultUserSdf) + bottomPartShader;
+
         // Create pipeline
-        const shader = device.createShaderModule({
-            code: raymarchWGSL,
+        const shader = this.device.createShaderModule({
+            code: insertedShder,
         });
 
-        this.renderPipeline = device.createRenderPipeline({
+        const shaderLog = await shader.getCompilationInfo();
+
+        let error = shaderLog.messages.find((msg: GPUCompilationMessage) => msg.type === "error") != undefined ? true: false;
+
+        if (error) {
+            return shaderLog.messages;
+        }
+
+        this.renderPipeline = this.device.createRenderPipeline({
             vertex: {
                 module: shader,
                 entryPoint: "vs_main",
@@ -143,7 +162,7 @@ export class Renderer {
             layout: "auto",
         });
 
-        this.bindGroup = device.createBindGroup({
+        this.bindGroup = this.device.createBindGroup({
             layout: this.renderPipeline.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: this.globalsBuffer } },
@@ -151,9 +170,15 @@ export class Renderer {
                 { binding: 2, resource: { buffer: this.collisionBuffer } },
             ],
         });
+
+        return [];
     }
 
-    render() {
+    render(time: number) {
+        this.updateGlobals({
+            time
+        });
+
         const commandEncoder = this.device.createCommandEncoder();
 
         const renderPassDescriptor: GPURenderPassDescriptor = {

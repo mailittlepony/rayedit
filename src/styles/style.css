@@ -36,3 +36,39 @@ body {
     height: 100%;
     overflow: hidden;
 }
+
+#error-log {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+
+    padding: 14px 22px;
+    max-width: 60%;
+
+    background: rgba(255, 0, 0, 0.15);
+    border: 1px solid rgba(255, 0, 0, 0.35);
+    backdrop-filter: blur(18px) saturate(180%);
+
+    color: #ffd2d2;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: "Inter", sans-serif;
+
+    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+
+    opacity: 0;
+    transition: opacity .4s ease, transform .4s ease;
+    transform: translate(-50%, -8px);
+
+    z-index: 10000;
+    pointer-events: none;
+}
+
+#error-log.active {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+

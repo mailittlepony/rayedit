@@ -13,6 +13,8 @@ export const PrimitiveType = {
     CYLINDER: 3,
     CONE: 4,
     CAPSULE: 5,
+
+    USER_CUSTOM: 6,
 } as const;
 
 export type PrimitiveType = typeof PrimitiveType[keyof typeof PrimitiveType];

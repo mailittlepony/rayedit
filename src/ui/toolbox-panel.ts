@@ -90,6 +90,11 @@ export class ToolboxPanel extends Panel {
             case PrimitiveType.CAPSULE: 
                 img.src = "icons/capsule.png";
                 break;
+            case PrimitiveType.USER_CUSTOM:
+                img.src = "icons/custom.png";
+                break;
+            default:
+                break;
         }
         return img;
     }

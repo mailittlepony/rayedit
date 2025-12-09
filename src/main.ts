@@ -9,7 +9,7 @@ import { SceneManagerPanel, type SceneItem } from "./ui/scene-manager-panel";
 import { ToolboxPanel, type ToolItem } from "./ui/toolbox-panel";
 import { PropertiesPanel } from "./ui/properties-panel";
 import { vec2, vec3 } from "gl-matrix";
-
+import { EditorPanel } from "./ui/editor-panel";
 
 // --- WebGPU init ---
 async function initWebGPU(canvas: HTMLCanvasElement)
@@ -44,6 +44,8 @@ async function initWebGPU(canvas: HTMLCanvasElement)
 
 
 // --- Panels ---
+const errorDiv = document.getElementById("error-log")!;
+
 const sceneRoot = document.getElementById("scene")!;
 const scenePanel = new ScenePanel(sceneRoot);
 scenePanel.init();
@@ -53,6 +55,50 @@ const sceneManagerRoot = document.getElementById("scene-manager")!;
 const sceneManagerPanel = new SceneManagerPanel(sceneManagerRoot);
 sceneManagerPanel.init();
 sceneManagerPanel.loaded();
+
+const editorRoot = document.getElementById("editor")!;
+const editorPanel = new EditorPanel({
+    parent: editorRoot,
+    initialCode: `
+//Available uniforms: 
+    //uniforms.time
+    //uniforms.deltatime
+    //uniforms.mouse
+    //uniforms.resolution
+// User custom SDF
+fn sd_user_custom(p: vec3<f32>, scale: vec3<f32>) -> f32 {
+    // simple scaling
+    let q = p / (scale * 2.0);
+
+    // base sphere
+    let d = length(q) - 1.0;
+
+    // tiny organic wobble
+    let w =
+        0.2 * sin(q.x * 10.0 + uniforms.time) +
+        0.2 * sin(q.y * 12.0 + uniforms.time * 1.3) +
+        0.2 * sin(q.z * 3.0 + uniforms.time * 1.7);
+
+    return d + w * 0.25;
+}
+`.trim(),
+
+    onChange: (code) => {
+        console.log("SDF Updated:", code);
+    },
+    onCompile: async (code) => {
+        const log = await renderer.compileShader(code);
+        if (log.length > 0) {
+            errorDiv.classList.add("active");
+        } else {
+            errorDiv.classList.remove("active");
+        }
+        log.forEach((msg) => {
+            errorDiv.textContent += `${msg.type}: ${msg.message}\n`;
+        })
+    },
+});
+editorPanel.init();
 
 const toolboxRoot = document.getElementById("toolbox")!;
 const toolboxPanel = new ToolboxPanel(toolboxRoot);
@@ -69,6 +115,7 @@ const tools: ToolItem[] = [
     { id: PrimitiveType.CYLINDER, label: "Cylinder" },
     { id: PrimitiveType.CONE, label: "Cone" },
     { id: PrimitiveType.CAPSULE, label: "Capsule" },
+    { id: PrimitiveType.USER_CUSTOM, label: "Custom" },
 ];
 
 function onClickItem(item: SceneItem) {
@@ -138,6 +185,8 @@ const canvas = scenePanel.canvas;
 const { device, context, format } = await initWebGPU(canvas);
 
 const renderer = new Renderer({ device, context, format });
+await renderer.init();
+
 const camera = new Camera();
 
 
@@ -360,7 +409,7 @@ function animate(now: number) {
     });
 
 
-    renderer.render();
+    renderer.render(t);
     requestAnimationFrame(animate);
 }
 
