@@ -41,11 +41,11 @@ The goal of the project is to serve as a lightweight playground for experimentin
 
 * **Unlimited primitives**: Add or delete any number of shapes (Cuboid, Ellipsoid, Torus, Cone, and more) from the toolbox.
 
-* **Real-time editing**: Modify any object’s properties instantly through the Inspector Panel, including Position, Rotation, Scale, Color.
+* **Real-time editing**: Modify any object’s properties instantly through the Inspector Panel, including Position, Rotation, Scale, Color
 
-** **Gizmo support** - Use the translation and freegrab gizmo to move objects interactively within the scene. (More gizmo modes coming soon.)
+* **Gizmo support** - Use the translation and freegrab gizmo to move objects interactively within the scene. (More gizmo modes coming soon.)
 
-**Custom SDF and operations** - Use the code editor to make your own SDFs and operations such as smoothmin, smoothmax etc.
+* **Custom SDF and operations** - Use the code editor to make your own SDFs and operations such as smoothmin, smoothmax etc.
 
 ### Using
 
