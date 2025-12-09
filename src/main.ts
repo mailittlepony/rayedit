@@ -8,7 +8,7 @@ import { ScenePanel } from "./ui/scene-panel";
 import { SceneManagerPanel, type SceneItem } from "./ui/scene-manager-panel";
 import { ToolboxPanel, type ToolItem } from "./ui/toolbox-panel";
 import { PropertiesPanel } from "./ui/properties-panel";
-import { mat4, vec2, vec3, vec4 } from "gl-matrix";
+import { vec2, vec3 } from "gl-matrix";
 
 
 // --- WebGPU init ---
@@ -153,7 +153,9 @@ let draggingAxis: 0 | 1 | 2 | null = null;
 let dragStartObjPos = vec3.create();
 let dragAxisWorld = vec3.create();
 let dragAxisScreenDir = vec2.create();
-let dragAmount = 0; 
+let dragAmount = 0;
+let dragFree = false;
+
 
 canvas.addEventListener("mousedown", async (e: MouseEvent) => {
     const rect = canvas.getBoundingClientRect();
@@ -176,7 +178,7 @@ canvas.addEventListener("mousedown", async (e: MouseEvent) => {
         const obj = renderer.activeObject;
         if (!obj) return;
 
-        camera.updateMatrices();
+        camera.update();
 
         const axisIndex = col.index as 0 | 1 | 2;
         draggingAxis = axisIndex;
@@ -193,6 +195,13 @@ canvas.addEventListener("mousedown", async (e: MouseEvent) => {
 
         vec2.set(dragAxisScreenDir, sx, sy);
         const len = vec2.length(dragAxisScreenDir);
+        if (col.index == 3) {
+            dragFree = true;
+            draggingAxis = null;
+            vec3.copy(dragStartObjPos, obj.position);
+            dragAmount = 0;
+
+        }
         if (len < 1e-4) {
             draggingAxis = null;
             return;
@@ -209,6 +218,7 @@ canvas.addEventListener("mouseup", async (e: MouseEvent) => {
     if (e.button === 0){
         isLeftDown = false;
         draggingAxis = null;
+        dragFree = false;
     }
     if (e.button === 2) isRightDown = false;
 
@@ -249,8 +259,8 @@ canvas.addEventListener("mousemove", async (e: MouseEvent) => {
     const panSpeed = 0.01;
 
     if (isLeftDown) {
-        if (draggingAxis !== null) {
-            const obj = renderer.activeObject;
+        const obj = renderer.activeObject;
+        if (draggingAxis !== null && obj) {
             if (!obj) return;
 
             // Project mouse movement on screen 
@@ -264,22 +274,32 @@ canvas.addEventListener("mousemove", async (e: MouseEvent) => {
 
             vec3.scaleAndAdd(obj.position, dragStartObjPos, dragAxisWorld, dragAmount * scale);
             obj.update();
+        } else if (dragFree && obj) {
+            const distance = vec3.distance(camera.position, obj.position);
+            const scale = distance * 0.0015; 
+            const worldDelta = vec3.create();
+
+            vec3.scaleAndAdd(worldDelta, worldDelta, camera.right, dx * scale);
+            vec3.scaleAndAdd(worldDelta, worldDelta, camera.upVec, -dy * scale);
+
+            vec3.add(obj.position, obj.position, worldDelta);
+            obj.update();
         } else {
             // no gizmo drag
             camera.orbit(dx, dy, orbitSpeed);
-            camera.updateMatrices();
+            camera.update();
         }
     }
 
     if (isRightDown) {
         camera.pan(dx, dy, panSpeed);
-        camera.updateMatrices();
+        camera.update();
     }
 });
 
 canvas.addEventListener("wheel", (e: WheelEvent) => {
     camera.zoom(e.deltaY);
-    camera.updateMatrices();
+    camera.update();
 }, { passive: false });
 
 

@@ -11,10 +11,10 @@ export class Camera {
     upVec: vec3    = vec3.create();
 
     constructor() {
-        this.updateMatrices();
+        this.update();
     }
 
-    updateMatrices() {
+    update() {
         // forward 
         vec3.subtract(this.forward, this.target, this.position);
         vec3.normalize(this.forward, this.forward);
