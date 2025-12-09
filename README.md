@@ -43,7 +43,9 @@ The goal of the project is to serve as a lightweight playground for experimentin
 
 * **Real-time editing**: Modify any object’s properties instantly through the Inspector Panel, including Position, Rotation, Scale, Color.
 
-* **Gizmo support** - Use the built-in translation gizmo to move objects interactively within the scene. (More gizmo modes coming soon.)
+** **Gizmo support** - Use the translation and freegrab gizmo to move objects interactively within the scene. (More gizmo modes coming soon.)
+
+**Custom SDF and operations** - Use the code editor to make your own SDFs and operations such as smoothmin, smoothmax etc.
 
 ### Using
 
@@ -81,9 +83,15 @@ Setting up the project is quick and straightforward.
 - [x] Feature basic interactivity
 - [x] Create any primitives
 - [x] Add translation gizmo
+- [x] Add custom object (with user-custom written SDF or primitive combination)
+- [ ] Make multiple custom sdf
+- [ ] Make panels clickable to move and close
 - [ ] Add gizmos (rotation, scaling, ...)
-- [ ] Add custom object (with user-custom written SDF or primitive combination)
 - [ ] Add interaction between objects
+
+## Acknowledgement
+
+This project was mainly possible thanks to my favorite teacher [stantonik](https://github.com/stantonik).
 
 <!-- LICENSE -->
 ## License
