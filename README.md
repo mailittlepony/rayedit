@@ -9,7 +9,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/mailittlepony/rayflow">
-    <img src="/images/logo.png" alt="Logo" width="80" height="80">
+    <img src="./images/logo.png" alt="Logo" width="80" height="80">
   </a>
 
   <h3 align="center">rayedit</h3>
@@ -24,11 +24,11 @@
 
 ## Overview
 
-[![Screen Shot](/images/demo.png)](https://mailittlepony.github.io/rayedit)
+[![Screen Shot](./images/demo.png)](https://mailittlepony.github.io/rayedit)
 
 This project is an experimental WebGPU-based 3D editor built with TypeScript and powered by ray marching. It focuses on simplicity, real-time interaction, and a clean UI that lets you build and explore procedural scenes without heavy engines or complex tooling.
 
-[![Demo](/images/demo.gif)](https://mailittlepony.github.io/rayedit)
+[![Demo](./images/demo.gif)](https://mailittlepony.github.io/rayedit)
 <p align="center"><i>Demo</i></p>
 
 You can add unlimited primitives, manipulate them directly in the viewport, and customize their properties through intuitive panels—all rendered using a single ray-marching pipeline.
